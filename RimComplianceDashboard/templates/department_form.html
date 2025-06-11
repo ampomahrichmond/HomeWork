@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+
+{% block title %}
+{% if department %}Edit Department{% else %}New Department{% endif %} - RPA Magic
+{% endblock %}
+
+{% block content %}
+<div class="department-form-page">
+    <div class="form-header mb-4">
+        <div class="row align-items-center">
+            <div class="col">
+                <h1 class="display-6 fw-bold mb-0">
+                    <i class="fas fa-building text-mustard me-2"></i>
+                    {% if department %}Edit Department{% else %}Add New Department{% endif %}
+                </h1>
+                <p class="text-muted mb-0">
+                    {% if department %}Update department information{% else %}Create a new organizational department{% endif %}
+                </p>
+            </div>
+            <div class="col-auto">
+                <a href="{{ url_for('departments') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Departments
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-mustard text-dark">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-building me-2"></i>Department Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" id="departmentForm">
+                        {{ form.hidden_tag() }}
+                        
+                        <div class="mb-4">
+                            {{ form.name.label(class="form-label fw-semibold") }}
+                            {{ form.name(class="form-control form-control-lg", placeholder="Enter department name") }}
+                            {% if form.name.errors %}
+                                <div class="text-danger small mt-1">
+                                    {% for error in form.name.errors %}
+                                        <div>{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            <div class="form-text">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Choose a clear, descriptive name for the department
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            {{ form.description.label(class="form-label fw-semibold") }}
+                            {{ form.description(class="form-control", rows="4", placeholder="Describe the department's purpose, responsibilities, and scope...") }}
+                            {% if form.description.errors %}
+                                <div class="text-danger small mt-1">
+                                    {% for error in form.description.errors %}
+                                        <div>{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            <div class="form-text">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Optional: Provide additional details about this department
+                            </div>
+                        </div>
+
+                        {% if department %}
+                        <div class="department-stats mb-4">
+                            <h6 class="fw-semibold mb-3">
+                                <i class="fas fa-chart-bar me-2 text-mustard"></i>Department Statistics
+                            </h6>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="stat-card bg-light p-3 rounded text-center">
+                                        <div class="stat-number text-primary fs-4 fw-bold">{{ department.users|length }}</div>
+                                        <div class="stat-label text-muted">Total Users</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="stat-card bg-light p-3 rounded text-center">
+                                        <div class="stat-number text-success fs-4 fw-bold">
+                                            {{ department.users|selectattr('role', 'equalto', 'GP')|list|length }}
+                                        </div>
+                                        <div class="stat-label text-muted">General Partners</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="stat-card bg-light p-3 rounded text-center">
+                                        <div class="stat-number text-info fs-4 fw-bold">{{ department.acknowledgments.count() }}</div>
+                                        <div class="stat-label text-muted">Acknowledgments</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {% if department.users %}
+                        <div class="department-users mb-4">
+                            <h6 class="fw-semibold mb-3">
+                                <i class="fas fa-users me-2 text-mustard"></i>Assigned Users
+                            </h6>
+                            <div class="users-list bg-light p-3 rounded">
+                                {% for user in department.users %}
+                                <div class="user-item d-flex align-items-center justify-content-between mb-2">
+                                    <div class="d-flex align-items-center">
+                                        <div class="user-avatar me-2">
+                                            <div class="avatar-circle bg-mustard text-dark small">
+                                                {{ user.first_name[0] }}{{ user.last_name[0] }}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div class="fw-semibold">{{ user.full_name }}</div>
+                                            <small class="text-muted">{{ user.email }}</small>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex align-items-center">
+                                        <span class="badge {% if user.role == 'Admin' %}bg-danger{% elif user.role == 'RIM Team' %}bg-success{% else %}bg-primary{% endif %} me-2">
+                                            {{ user.role }}
+                                        </span>
+                                        {% if user.is_active %}
+                                            <span class="badge bg-success bg-opacity-25 text-success">Active</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary bg-opacity-25 text-secondary">Inactive</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% endif %}
+
+                        <div class="form-actions d-flex gap-2 justify-content-end pt-3 border-top">
+                            <a href="{{ url_for('departments') }}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </a>
+                            <button type="submit" class="btn btn-mustard">
+                                <i class="fas fa-save me-2"></i>
+                                {% if department %}Update Department{% else %}Create Department{% endif %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <div class="sticky-top" style="top: 100px;">
+                <!-- Guidelines -->
+                <div class="card mb-4">
+                    <div class="card-header bg-info text-white">
+                        <h6 class="card-title mb-0">
+                            <i class="fas fa-lightbulb me-2"></i>Department Guidelines
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="guideline-item mb-3">
+                            <h6 class="fw-semibold">Naming Conventions</h6>
+                            <ul class="small text-muted mb-0">
+                                <li>Use clear, descriptive names</li>
+                                <li>Avoid abbreviations when possible</li>
+                                <li>Be consistent with existing departments</li>
+                            </ul>
+                        </div>
+                        <div class="guideline-item mb-3">
+                            <h6 class="fw-semibold">Organization Structure</h6>
+                            <ul class="small text-muted mb-0">
+                                <li>Reflect actual business structure</li>
+                                <li>Consider reporting relationships</li>
+                                <li>Plan for future growth</li>
+                            </ul>
+                        </div>
+                        <div class="guideline-item">
+                            <h6 class="fw-semibold">User Assignment</h6>
+                            <ul class="small text-muted mb-0">
+                                <li>Assign users to appropriate departments</li>
+                                <li>Ensure each GP has a department</li>
+                                <li>Designate RIM liaisons per department</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Best Practices -->
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h6 class="card-title mb-0">
+                            <i class="fas fa-check-circle me-2"></i>Best Practices
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="practice-item mb-3">
+                            <div class="d-flex align-items-start">
+                                <i class="fas fa-check text-success me-2 mt-1"></i>
+                                <div>
+                                    <strong>Clear Descriptions</strong>
+                                    <p class="small text-muted mb-0">Include the department's role and responsibilities</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="practice-item mb-3">
+                            <div class="d-flex align-items-start">
+                                <i class="fas fa-check text-success me-2 mt-1"></i>
+                                <div>
+                                    <strong>Regular Reviews</strong>
+                                    <p class="small text-muted mb-0">Periodically review department structure and assignments</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="practice-item">
+                            <div class="d-flex align-items-start">
+                                <i class="fas fa-check text-success me-2 mt-1"></i>
+                                <div>
+                                    <strong>Consistency</strong>
+                                    <p class="small text-muted mb-0">Maintain consistent naming and organization patterns</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const nameField = document.getElementById('name');
+    const descriptionField = document.getElementById('description');
+    
+    // Auto-generate description placeholder based on name
+    if (nameField && descriptionField) {
+        nameField.addEventListener('input', function() {
+            const name = this.value.trim();
+            if (name && !descriptionField.value.trim()) {
+                descriptionField.placeholder = `Describe the ${name} department's responsibilities, scope, and key functions...`;
+            }
+        });
+    }
+    
+    // Character counter for description
+    if (descriptionField) {
+        const maxLength = 500; // Reasonable limit for description
+        const counter = document.createElement('div');
+        counter.className = 'form-text text-end';
+        counter.id = 'descriptionCounter';
+        descriptionField.parentNode.appendChild(counter);
+        
+        function updateCounter() {
+            const current = descriptionField.value.length;
+            counter.textContent = `${current}/${maxLength} characters`;
+            
+            if (current > maxLength * 0.9) {
+                counter.classList.add('text-warning');
+            } else {
+                counter.classList.remove('text-warning');
+            }
+            
+            if (current > maxLength) {
+                counter.classList.add('text-danger');
+                counter.classList.remove('text-warning');
+            } else {
+                counter.classList.remove('text-danger');
+            }
+        }
+        
+        descriptionField.addEventListener('input', updateCounter);
+        updateCounter(); // Initial count
+    }
+});
+
+// Form validation
+document.getElementById('departmentForm').addEventListener('submit', function(e) {
+    const nameField = document.getElementById('name');
+    const name = nameField.value.trim();
+    
+    if (!name) {
+        e.preventDefault();
+        alert('Department name is required.');
+        nameField.focus();
+        return false;
+    }
+    
+    if (name.length < 2) {
+        e.preventDefault();
+        alert('Department name must be at least 2 characters long.');
+        nameField.focus();
+        return false;
+    }
+});
+</script>
+{% endblock %}

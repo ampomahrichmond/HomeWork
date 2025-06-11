@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block title %}Compliance Report - RPA Magic{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3">
+                    <i class="fas fa-chart-line me-2 text-mustard"></i>Compliance Report
+                </h1>
+                <div>
+                    <button class="btn btn-mustard" onclick="window.print()">
+                        <i class="fas fa-print me-1"></i>Print Report
+                    </button>
+                    <a href="{{ url_for('export_pdf') }}" class="btn btn-outline-mustard ms-2">
+                        <i class="fas fa-file-pdf me-1"></i>Export PDF
+                    </a>
+                </div>
+            </div>
+
+            <!-- Overall Statistics -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card bg-primary text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4 class="card-title">{{ total_acknowledgments }}</h4>
+                                    <p class="card-text">Total Acknowledgments</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-file-signature fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-success text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4 class="card-title">{{ approved_count }}</h4>
+                                    <p class="card-text">Approved</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-check-circle fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-warning text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4 class="card-title">{{ pending_count }}</h4>
+                                    <p class="card-text">Pending Review</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-clock fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-danger text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4 class="card-title">{{ overdue_count }}</h4>
+                                    <p class="card-text">Needs Revision</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-exclamation-triangle fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Overall Compliance Rate -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header bg-mustard text-white">
+                            <h5 class="mb-0">
+                                <i class="fas fa-percentage me-2"></i>Overall Compliance Rate
+                            </h5>
+                        </div>
+                        <div class="card-body text-center">
+                            <div class="display-1 text-{% if overall_compliance >= 90 %}success{% elif overall_compliance >= 70 %}warning{% else %}danger{% endif %}">
+                                {{ overall_compliance }}%
+                            </div>
+                            <p class="lead">
+                                {% if overall_compliance >= 90 %}
+                                    <i class="fas fa-thumbs-up text-success"></i> Excellent Compliance
+                                {% elif overall_compliance >= 70 %}
+                                    <i class="fas fa-exclamation text-warning"></i> Good Compliance
+                                {% else %}
+                                    <i class="fas fa-exclamation-triangle text-danger"></i> Needs Improvement
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Department Statistics -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header bg-mustard text-white">
+                            <h5 class="mb-0">
+                                <i class="fas fa-building me-2"></i>Department Compliance Statistics
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-striped table-hover">
+                                    <thead class="bg-light">
+                                        <tr>
+                                            <th>Department</th>
+                                            <th class="text-center">Total Acknowledgments</th>
+                                            <th class="text-center">Approved</th>
+                                            <th class="text-center">Compliance Rate</th>
+                                            <th class="text-center">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for dept in dept_stats %}
+                                        <tr>
+                                            <td>
+                                                <strong>{{ dept.department }}</strong>
+                                            </td>
+                                            <td class="text-center">{{ dept.total_acknowledgments }}</td>
+                                            <td class="text-center">{{ dept.approved }}</td>
+                                            <td class="text-center">
+                                                <span class="badge bg-{% if dept.compliance_rate >= 90 %}success{% elif dept.compliance_rate >= 70 %}warning{% else %}danger{% endif %}">
+                                                    {{ dept.compliance_rate }}%
+                                                </span>
+                                            </td>
+                                            <td class="text-center">
+                                                {% if dept.compliance_rate >= 90 %}
+                                                    <i class="fas fa-check-circle text-success" title="Excellent"></i>
+                                                {% elif dept.compliance_rate >= 70 %}
+                                                    <i class="fas fa-exclamation-circle text-warning" title="Good"></i>
+                                                {% else %}
+                                                    <i class="fas fa-times-circle text-danger" title="Needs Improvement"></i>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Compliance Guidelines -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">
+                                <i class="fas fa-info-circle me-2"></i>Compliance Guidelines
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <h6 class="text-success">
+                                        <i class="fas fa-check-circle me-1"></i>Excellent (90%+)
+                                    </h6>
+                                    <p class="small">Department meets all compliance requirements and maintains high standards.</p>
+                                </div>
+                                <div class="col-md-4">
+                                    <h6 class="text-warning">
+                                        <i class="fas fa-exclamation-circle me-1"></i>Good (70-89%)
+                                    </h6>
+                                    <p class="small">Department meets most requirements but has room for improvement.</p>
+                                </div>
+                                <div class="col-md-4">
+                                    <h6 class="text-danger">
+                                        <i class="fas fa-times-circle me-1"></i>Needs Improvement (<70%)
+                                    </h6>
+                                    <p class="small">Department requires immediate attention to meet compliance standards.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Auto-refresh every 5 minutes
+setTimeout(function() {
+    location.reload();
+}, 300000);
+</script>
+{% endblock %}

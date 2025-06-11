@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+
+{% block title %}
+{% if user %}Edit User{% else %}New User{% endif %} - RPA Magic
+{% endblock %}
+
+{% block content %}
+<div class="user-form-page">
+    <div class="form-header mb-4">
+        <div class="row align-items-center">
+            <div class="col">
+                <h1 class="display-6 fw-bold mb-0">
+                    <i class="fas fa-user-{% if user %}edit{% else %}plus{% endif %} text-mustard me-2"></i>
+                    {% if user %}Edit User{% else %}Add New User{% endif %}
+                </h1>
+                <p class="text-muted mb-0">
+                    {% if user %}Update user information and settings{% else %}Create a new system user{% endif %}
+                </p>
+            </div>
+            <div class="col-auto">
+                <a href="{{ url_for('users') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Users
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-mustard text-dark">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-user-circle me-2"></i>User Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" id="userForm">
+                        {{ form.hidden_tag() }}
+                        
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                {{ form.first_name.label(class="form-label fw-semibold") }}
+                                {{ form.first_name(class="form-control") }}
+                                {% if form.first_name.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.first_name.errors %}
+                                            <div>{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                {{ form.last_name.label(class="form-label fw-semibold") }}
+                                {{ form.last_name(class="form-control") }}
+                                {% if form.last_name.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.last_name.errors %}
+                                            <div>{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                {{ form.username.label(class="form-label fw-semibold") }}
+                                {{ form.username(class="form-control") }}
+                                {% if form.username.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.username.errors %}
+                                            <div>{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                {{ form.email.label(class="form-label fw-semibold") }}
+                                {{ form.email(class="form-control") }}
+                                {% if form.email.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.email.errors %}
+                                            <div>{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                {{ form.role.label(class="form-label fw-semibold") }}
+                                {{ form.role(class="form-select") }}
+                                {% if form.role.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.role.errors %}
+                                            <div>{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                {{ form.department_id.label(class="form-label fw-semibold") }}
+                                {{ form.department_id(class="form-select") }}
+                                {% if form.department_id.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.department_id.errors %}
+                                            <div>{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="password-section mb-4">
+                            <h6 class="fw-semibold mb-3">
+                                <i class="fas fa-lock me-2"></i>
+                                {% if user %}Change Password (leave blank to keep current){% else %}Set Password{% endif %}
+                            </h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    {{ form.password.label(class="form-label") }}
+                                    {{ form.password(class="form-control") }}
+                                    {% if form.password.errors %}
+                                        <div class="text-danger small mt-1">
+                                            {% for error in form.password.errors %}
+                                                <div>{{ error }}</div>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-md-6">
+                                    {{ form.confirm_password.label(class="form-label") }}
+                                    {{ form.confirm_password(class="form-control") }}
+                                    {% if form.confirm_password.errors %}
+                                        <div class="text-danger small mt-1">
+                                            {% for error in form.confirm_password.errors %}
+                                                <div>{{ error }}</div>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <div class="form-check">
+                                {{ form.is_active(class="form-check-input") }}
+                                {{ form.is_active.label(class="form-check-label fw-semibold") }}
+                            </div>
+                            <div class="form-text">
+                                Inactive users cannot log in to the system
+                            </div>
+                        </div>
+
+                        <div class="form-actions d-flex gap-2 justify-content-end pt-3 border-top">
+                            <a href="{{ url_for('users') }}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </a>
+                            <button type="submit" class="btn btn-mustard">
+                                <i class="fas fa-save me-2"></i>
+                                {% if user %}Update User{% else %}Create User{% endif %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <div class="sticky-top" style="top: 100px;">
+                <!-- Role Guide -->
+                <div class="card mb-4">
+                    <div class="card-header bg-info text-white">
+                        <h6 class="card-title mb-0">
+                            <i class="fas fa-info-circle me-2"></i>User Roles
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="role-item mb-3">
+                            <h6 class="fw-semibold text-primary">General Partner (GP)</h6>
+                            <ul class="small text-muted mb-0">
+                                <li>Complete and submit acknowledgments</li>
+                                <li>Upload supporting documents</li>
+                                <li>View own submission status</li>
+                            </ul>
+                        </div>
+                        <div class="role-item mb-3">
+                            <h6 class="fw-semibold text-success">RIM Team</h6>
+                            <ul class="small text-muted mb-0">
+                                <li>Review submitted acknowledgments</li>
+                                <li>Approve or request revisions</li>
+                                <li>View department compliance status</li>
+                            </ul>
+                        </div>
+                        <div class="role-item">
+                            <h6 class="fw-semibold text-danger">Administrator</h6>
+                            <ul class="small text-muted mb-0">
+                                <li>Manage all users and departments</li>
+                                <li>View audit trails and reports</li>
+                                <li>Export compliance data</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Security Guidelines -->
+                <div class="card">
+                    <div class="card-header bg-warning text-dark">
+                        <h6 class="card-title mb-0">
+                            <i class="fas fa-shield-alt me-2"></i>Security Guidelines
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="security-item mb-3">
+                            <h6 class="fw-semibold">Password Requirements</h6>
+                            <ul class="small text-muted mb-0">
+                                <li>Minimum 6 characters</li>
+                                <li>Use strong, unique passwords</li>
+                                <li>Change default passwords immediately</li>
+                            </ul>
+                        </div>
+                        <div class="security-item">
+                            <h6 class="fw-semibold">Account Management</h6>
+                            <ul class="small text-muted mb-0">
+                                <li>Deactivate unused accounts</li>
+                                <li>Review user permissions regularly</li>
+                                <li>Assign minimal required access</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const passwordField = document.getElementById('password');
+    const confirmPasswordField = document.getElementById('confirm_password');
+    
+    // Password strength indicator
+    if (passwordField) {
+        passwordField.addEventListener('input', function() {
+            const password = this.value;
+            const strength = getPasswordStrength(password);
+            updatePasswordStrength(strength);
+        });
+    }
+    
+    // Confirm password validation
+    if (confirmPasswordField) {
+        confirmPasswordField.addEventListener('input', function() {
+            const password = passwordField.value;
+            const confirmPassword = this.value;
+            
+            if (confirmPassword && password !== confirmPassword) {
+                this.setCustomValidity('Passwords do not match');
+                this.classList.add('is-invalid');
+            } else {
+                this.setCustomValidity('');
+                this.classList.remove('is-invalid');
+            }
+        });
+    }
+});
+
+function getPasswordStrength(password) {
+    let strength = 0;
+    if (password.length >= 6) strength++;
+    if (password.length >= 8) strength++;
+    if (/[A-Z]/.test(password)) strength++;
+    if (/[a-z]/.test(password)) strength++;
+    if (/[0-9]/.test(password)) strength++;
+    if (/[^A-Za-z0-9]/.test(password)) strength++;
+    return strength;
+}
+
+function updatePasswordStrength(strength) {
+    // This could show a visual password strength indicator
+    // For now, just log the strength level
+    console.log('Password strength:', strength);
+}
+
+// Form validation
+document.getElementById('userForm').addEventListener('submit', function(e) {
+    const passwordField = document.getElementById('password');
+    const confirmPasswordField = document.getElementById('confirm_password');
+    
+    if (passwordField.value && passwordField.value !== confirmPasswordField.value) {
+        e.preventDefault();
+        alert('Passwords do not match. Please check your entries.');
+        confirmPasswordField.focus();
+        return false;
+    }
+});
+</script>
+{% endblock %}

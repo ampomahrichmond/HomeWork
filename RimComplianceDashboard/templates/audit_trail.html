@@ -1,0 +1,346 @@
+{% extends "base.html" %}
+
+{% block title %}Audit Trail - RPA Magic{% endblock %}
+
+{% block content %}
+<div class="audit-trail-page">
+    <div class="page-header mb-4">
+        <div class="row align-items-center">
+            <div class="col">
+                <h1 class="display-6 fw-bold mb-0">
+                    <i class="fas fa-clipboard-list text-mustard me-2"></i>Audit Trail
+                </h1>
+                <p class="text-muted mb-0">System activity log and compliance tracking</p>
+            </div>
+            <div class="col-auto">
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-outline-mustard" onclick="refreshAuditLog()">
+                        <i class="fas fa-sync-alt me-2"></i>Refresh
+                    </button>
+                    <button type="button" class="btn btn-outline-mustard dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="fas fa-filter me-2"></i>Filter
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="?action=User%20Login">User Logins</a></li>
+                        <li><a class="dropdown-item" href="?action=Acknowledgment%20Submitted">Acknowledgment Submissions</a></li>
+                        <li><a class="dropdown-item" href="?action=Acknowledgment%20Approved">Acknowledgment Approvals</a></li>
+                        <li><a class="dropdown-item" href="?resource_type=User">User Management</a></li>
+                        <li><a class="dropdown-item" href="?resource_type=Department">Department Management</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{{ url_for('audit_trail') }}">Clear Filters</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audit Statistics -->
+    <div class="audit-stats mb-4">
+        <div class="row g-3">
+            <div class="col-lg-3 col-md-6">
+                <div class="stat-card card bg-primary text-white">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="stat-icon me-3">
+                                <i class="fas fa-list fa-2x"></i>
+                            </div>
+                            <div>
+                                <div class="stat-number">{{ logs|length }}</div>
+                                <div class="stat-label">Recent Activities</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-3 col-md-6">
+                <div class="stat-card card bg-success text-white">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="stat-icon me-3">
+                                <i class="fas fa-sign-in-alt fa-2x"></i>
+                            </div>
+                            <div>
+                                <div class="stat-number">
+                                    {{ logs|selectattr('action', 'equalto', 'User Login')|list|length }}
+                                </div>
+                                <div class="stat-label">User Logins</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-3 col-md-6">
+                <div class="stat-card card bg-info text-white">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="stat-icon me-3">
+                                <i class="fas fa-file-signature fa-2x"></i>
+                            </div>
+                            <div>
+                                <div class="stat-number">
+                                    {{ logs|selectattr('action', 'search', 'Acknowledgment')|list|length }}
+                                </div>
+                                <div class="stat-label">Acknowledgment Actions</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-3 col-md-6">
+                <div class="stat-card card bg-warning text-dark">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="stat-icon me-3">
+                                <i class="fas fa-users-cog fa-2x"></i>
+                            </div>
+                            <div>
+                                <div class="stat-number">
+                                    {{ logs|selectattr('resource_type', 'in', ['User', 'Department'])|list|length }}
+                                </div>
+                                <div class="stat-label">Admin Actions</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audit Log Table -->
+    <div class="audit-log-table card">
+        <div class="card-header bg-mustard text-dark">
+            <h5 class="card-title mb-0">
+                <i class="fas fa-history me-2"></i>Activity Log
+                <small class="text-muted">(Last 100 entries)</small>
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            {% if logs %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th width="15%">Timestamp</th>
+                            <th width="12%">User</th>
+                            <th width="20%">Action</th>
+                            <th width="15%">Resource</th>
+                            <th width="25%">Details</th>
+                            <th width="13%">IP Address</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in logs %}
+                        <tr>
+                            <td>
+                                <div class="timestamp">
+                                    <div class="fw-semibold">{{ log.timestamp.strftime('%m/%d/%Y') }}</div>
+                                    <small class="text-muted">{{ log.timestamp.strftime('%H:%M:%S') }}</small>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="user-info">
+                                    {% if log.user %}
+                                        <div class="fw-semibold">{{ log.user.full_name }}</div>
+                                        <small class="text-muted">@{{ log.user.username }}</small>
+                                    {% else %}
+                                        <span class="text-muted">System</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="action-info">
+                                    <span class="badge {% if 'Login' in log.action %}bg-success{% elif 'Delete' in log.action %}bg-danger{% elif 'Create' in log.action or 'Submit' in log.action %}bg-primary{% elif 'Update' in log.action or 'Edit' in log.action %}bg-warning text-dark{% elif 'Approve' in log.action %}bg-info{% else %}bg-secondary{% endif %}">
+                                        {{ log.action }}
+                                    </span>
+                                </div>
+                            </td>
+                            <td>
+                                {% if log.resource_type %}
+                                    <div class="resource-info">
+                                        <div class="fw-semibold">{{ log.resource_type }}</div>
+                                        {% if log.resource_id %}
+                                            <small class="text-muted">ID: {{ log.resource_id }}</small>
+                                        {% endif %}
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if log.details %}
+                                    <div class="details-info">
+                                        <span class="details-text" data-bs-toggle="tooltip" title="{{ log.details }}">
+                                            {{ log.details[:50] }}{% if log.details|length > 50 %}...{% endif %}
+                                        </span>
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if log.ip_address %}
+                                    <code class="small">{{ log.ip_address }}</code>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state text-center py-5">
+                <i class="fas fa-clipboard fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No Audit Logs Found</h5>
+                <p class="text-muted mb-0">
+                    No audit logs match your current filters, or no activities have been logged yet.
+                </p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Export Options -->
+    {% if logs %}
+    <div class="export-options mt-4">
+        <div class="card">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h6 class="mb-0">
+                            <i class="fas fa-download me-2 text-mustard"></i>Export Audit Data
+                        </h6>
+                        <p class="text-muted mb-0 small">
+                            Export audit logs for compliance reporting and analysis
+                        </p>
+                    </div>
+                    <div class="col-auto">
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-outline-mustard" onclick="exportAuditLog('csv')">
+                                <i class="fas fa-file-csv me-2"></i>Export CSV
+                            </button>
+                            <button type="button" class="btn btn-outline-mustard" onclick="exportAuditLog('pdf')">
+                                <i class="fas fa-file-pdf me-2"></i>Export PDF
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Audit Detail Modal -->
+<div class="modal fade" id="auditDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-info-circle me-2"></i>Audit Log Details
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="auditDetailContent">
+                    <!-- Content will be loaded dynamically -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function refreshAuditLog() {
+    location.reload();
+}
+
+function exportAuditLog(format) {
+    const url = `/audit/export?format=${format}`;
+    window.open(url, '_blank');
+}
+
+function showAuditDetail(logId) {
+    // This would fetch and display detailed information about a specific audit log entry
+    const modal = new bootstrap.Modal(document.getElementById('auditDetailModal'));
+    const content = document.getElementById('auditDetailContent');
+    
+    content.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+    modal.show();
+    
+    // Simulated AJAX call - in a real implementation, this would fetch data from the server
+    setTimeout(() => {
+        content.innerHTML = `
+            <div class="audit-detail">
+                <h6>Audit Log Entry #${logId}</h6>
+                <p>Detailed information would be displayed here...</p>
+            </div>
+        `;
+    }, 1000);
+}
+
+// Initialize tooltips
+document.addEventListener('DOMContentLoaded', function() {
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+    
+    // Add click handler for table rows to show details
+    const tableRows = document.querySelectorAll('.audit-log-table tbody tr');
+    tableRows.forEach((row, index) => {
+        row.style.cursor = 'pointer';
+        row.addEventListener('click', function() {
+            showAuditDetail(index + 1);
+        });
+    });
+    
+    // Highlight filtered actions
+    const urlParams = new URLSearchParams(window.location.search);
+    const actionFilter = urlParams.get('action');
+    const resourceFilter = urlParams.get('resource_type');
+    
+    if (actionFilter || resourceFilter) {
+        document.querySelectorAll('tbody tr').forEach(row => {
+            row.classList.add('table-secondary');
+        });
+    }
+});
+
+// Auto-refresh every 60 seconds
+setInterval(() => {
+    if (document.visibilityState === 'visible') {
+        refreshAuditLog();
+    }
+}, 60000);
+
+// Search functionality
+function filterAuditLog(searchTerm) {
+    const rows = document.querySelectorAll('.audit-log-table tbody tr');
+    const term = searchTerm.toLowerCase();
+    
+    rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        const shouldShow = text.includes(term);
+        row.style.display = shouldShow ? '' : 'none';
+    });
+}
+
+// Add search box functionality if needed
+const searchInput = document.getElementById('auditSearch');
+if (searchInput) {
+    searchInput.addEventListener('input', function() {
+        filterAuditLog(this.value);
+    });
+}
+</script>
+{% endblock %}

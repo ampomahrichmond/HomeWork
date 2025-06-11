@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}Welcome - RPA Magic{% endblock %}
+
+{% block content %}
+<div class="hero-section text-center py-5">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="hero-content">
+                    <i class="fas fa-magic display-1 text-mustard mb-4"></i>
+                    <h1 class="display-4 fw-bold mb-4">Welcome to RPA Magic</h1>
+                    <p class="lead mb-4">
+                        Your comprehensive Records & Information Management (RIM) compliance system. 
+                        Streamline acknowledgments, track compliance, and maintain audit trails with ease.
+                    </p>
+                    <div class="hero-actions">
+                        {% if current_user.is_authenticated %}
+                            <a href="{{ url_for('dashboard') }}" class="btn btn-mustard btn-lg me-3">
+                                <i class="fas fa-tachometer-alt me-2"></i>Go to Dashboard
+                            </a>
+                        {% else %}
+                            <a href="{{ url_for('login') }}" class="btn btn-mustard btn-lg me-3">
+                                <i class="fas fa-sign-in-alt me-2"></i>Login
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="features-section py-5 bg-light">
+    <div class="container">
+        <div class="row">
+            <div class="col-12 text-center mb-5">
+                <h2 class="display-6 fw-bold">Key Features</h2>
+                <p class="lead">Everything you need for RIM compliance management</p>
+            </div>
+        </div>
+        
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="feature-card card h-100 shadow-sm">
+                    <div class="card-body text-center p-4">
+                        <div class="feature-icon text-mustard mb-3">
+                            <i class="fas fa-file-signature fa-3x"></i>
+                        </div>
+                        <h5 class="card-title">Digital Acknowledgments</h5>
+                        <p class="card-text">
+                            Create, submit, and track RIM acknowledgments with digital signatures 
+                            and document attachments.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="feature-card card h-100 shadow-sm">
+                    <div class="card-body text-center p-4">
+                        <div class="feature-icon text-mustard mb-3">
+                            <i class="fas fa-users-cog fa-3x"></i>
+                        </div>
+                        <h5 class="card-title">Role-Based Access</h5>
+                        <p class="card-text">
+                            Secure role-based system for General Partners, RIM Team members, 
+                            and Administrators with appropriate permissions.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="feature-card card h-100 shadow-sm">
+                    <div class="card-body text-center p-4">
+                        <div class="feature-icon text-mustard mb-3">
+                            <i class="fas fa-chart-line fa-3x"></i>
+                        </div>
+                        <h5 class="card-title">Compliance Tracking</h5>
+                        <p class="card-text">
+                            Monitor compliance status, track progress, and generate comprehensive 
+                            reports for audit purposes.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="feature-card card h-100 shadow-sm">
+                    <div class="card-body text-center p-4">
+                        <div class="feature-icon text-mustard mb-3">
+                            <i class="fas fa-bell fa-3x"></i>
+                        </div>
+                        <h5 class="card-title">Smart Notifications</h5>
+                        <p class="card-text">
+                            Automated email notifications and in-app alerts for deadlines, 
+                            submissions, and approvals.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="feature-card card h-100 shadow-sm">
+                    <div class="card-body text-center p-4">
+                        <div class="feature-icon text-mustard mb-3">
+                            <i class="fas fa-clipboard-list fa-3x"></i>
+                        </div>
+                        <h5 class="card-title">Audit Trail</h5>
+                        <p class="card-text">
+                            Complete audit trail of all actions, changes, and approvals 
+                            for compliance and regulatory requirements.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="feature-card card h-100 shadow-sm">
+                    <div class="card-body text-center p-4">
+                        <div class="feature-icon text-mustard mb-3">
+                            <i class="fas fa-file-export fa-3x"></i>
+                        </div>
+                        <h5 class="card-title">Export & Reporting</h5>
+                        <p class="card-text">
+                            Export acknowledgments to PDF, generate compliance reports, 
+                            and maintain records for auditing.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %}Login - RPA Magic{% endblock %}
+
+{% block content %}
+<div class="login-section">
+    <div class="row justify-content-center">
+        <div class="col-lg-5 col-md-7">
+            <div class="login-card card shadow-lg">
+                <div class="card-body p-5">
+                    <div class="text-center mb-4">
+                        <i class="fas fa-magic fa-3x text-mustard mb-3"></i>
+                        <h2 class="fw-bold">RPA Magic</h2>
+                        <p class="text-muted">Records & Information Management</p>
+                    </div>
+                    
+                    <form method="POST">
+                        {{ form.hidden_tag() }}
+                        
+                        <div class="mb-3">
+                            {{ form.username.label(class="form-label fw-semibold") }}
+                            {{ form.username(class="form-control form-control-lg rounded-pill") }}
+                            {% if form.username.errors %}
+                                <div class="text-danger small mt-1">
+                                    {% for error in form.username.errors %}
+                                        <div>{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="mb-4">
+                            {{ form.password.label(class="form-label fw-semibold") }}
+                            {{ form.password(class="form-control form-control-lg rounded-pill") }}
+                            {% if form.password.errors %}
+                                <div class="text-danger small mt-1">
+                                    {% for error in form.password.errors %}
+                                        <div>{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-mustard btn-lg rounded-pill">
+                                <i class="fas fa-sign-in-alt me-2"></i>Login
+                            </button>
+                        </div>
+                    </form>
+                    
+                    <div class="text-center mt-4">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Contact your administrator for account access
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="login-info mt-5">
+    <div class="row">
+        <div class="col-12">
+            <div class="card bg-light">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-users me-2 text-mustard"></i>User Roles
+                    </h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="role-info">
+                                <h6 class="fw-semibold text-primary">
+                                    <i class="fas fa-user-tie me-1"></i>General Partner (GP)
+                                </h6>
+                                <ul class="small text-muted">
+                                    <li>Complete RIM acknowledgments</li>
+                                    <li>Upload supporting documents</li>
+                                    <li>Track submission status</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="role-info">
+                                <h6 class="fw-semibold text-success">
+                                    <i class="fas fa-user-check me-1"></i>RIM Team
+                                </h6>
+                                <ul class="small text-muted">
+                                    <li>Review acknowledgments</li>
+                                    <li>Request revisions</li>
+                                    <li>Approve submissions</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="role-info">
+                                <h6 class="fw-semibold text-warning">
+                                    <i class="fas fa-user-cog me-1"></i>Administrator
+                                </h6>
+                                <ul class="small text-muted">
+                                    <li>Manage users and departments</li>
+                                    <li>View audit trails</li>
+                                    <li>Export reports</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Focus on username field
+    document.getElementById('username').focus();
+    
+    // Add floating label effect
+    const inputs = document.querySelectorAll('.form-control');
+    inputs.forEach(input => {
+        input.addEventListener('focus', function() {
+            this.parentElement.classList.add('focused');
+        });
+        
+        input.addEventListener('blur', function() {
+            if (!this.value) {
+                this.parentElement.classList.remove('focused');
+            }
+        });
+        
+        // Check if input has value on load
+        if (input.value) {
+            input.parentElement.classList.add('focused');
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+
+{% block title %}Users - RPA Magic{% endblock %}
+
+{% block content %}
+<div class="users-page">
+    <div class="page-header mb-4">
+        <div class="row align-items-center">
+            <div class="col">
+                <h1 class="display-6 fw-bold mb-0">
+                    <i class="fas fa-users text-mustard me-2"></i>User Management
+                </h1>
+                <p class="text-muted mb-0">Manage system users and their roles</p>
+            </div>
+            <div class="col-auto">
+                <a href="{{ url_for('user_form') }}" class="btn btn-mustard">
+                    <i class="fas fa-user-plus me-2"></i>Add User
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="users-table card">
+        <div class="card-header bg-mustard text-dark">
+            <h5 class="card-title mb-0">
+                <i class="fas fa-table me-2"></i>System Users
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            {% if users %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Department</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="user-avatar me-3">
+                                        <div class="avatar-circle bg-mustard text-dark">
+                                            {{ user.first_name[0] }}{{ user.last_name[0] }}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div class="fw-semibold">{{ user.full_name }}</div>
+                                        <small class="text-muted">@{{ user.username }}</small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <div>{{ user.email }}</div>
+                            </td>
+                            <td>
+                                <span class="badge {% if user.role == 'Admin' %}bg-danger{% elif user.role == 'RIM Team' %}bg-success{% else %}bg-primary{% endif %}">
+                                    {{ user.role }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if user.department %}
+                                    <div class="fw-semibold">{{ user.department.name }}</div>
+                                    <small class="text-muted">{{ user.department.description or 'No description' }}</small>
+                                {% else %}
+                                    <span class="text-muted">No Department</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if user.is_active %}
+                                    <span class="badge bg-success bg-opacity-25 text-success">
+                                        <i class="fas fa-check-circle me-1"></i>Active
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-secondary bg-opacity-25 text-secondary">
+                                        <i class="fas fa-pause-circle me-1"></i>Inactive
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div>{{ user.created_at.strftime('%Y-%m-%d') }}</div>
+                                <small class="text-muted">{{ user.created_at.strftime('%H:%M') }}</small>
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <a href="{{ url_for('user_form', id=user.id) }}" 
+                                       class="btn btn-outline-primary" title="Edit User">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    {% if user.id != current_user.id %}
+                                    <button type="button" class="btn btn-outline-warning" 
+                                            onclick="toggleUserStatus({{ user.id }}, '{{ user.full_name }}', {{ user.is_active|lower }})"
+                                            title="{% if user.is_active %}Deactivate{% else %}Activate{% endif %} User">
+                                        <i class="fas fa-{% if user.is_active %}pause{% else %}play{% endif %}"></i>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state text-center py-5">
+                <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No Users Found</h5>
+                <p class="text-muted mb-3">No users have been created yet.</p>
+                <a href="{{ url_for('user_form') }}" class="btn btn-mustard">
+                    <i class="fas fa-user-plus me-2"></i>Create First User
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- User Status Toggle Modal -->
+<div class="modal fade" id="statusModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Change User Status</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center">
+                    <i class="fas fa-user-cog fa-3x text-warning mb-3"></i>
+                    <h6 id="statusMessage"></h6>
+                    <p class="text-muted mb-0">This action will change the user's access to the system.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="POST" id="statusForm" class="d-inline">
+                    <button type="submit" class="btn btn-warning" id="statusButton">
+                        <i class="fas fa-user-cog me-2"></i>Change Status
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleUserStatus(userId, userName, isActive) {
+    const modal = new bootstrap.Modal(document.getElementById('statusModal'));
+    const form = document.getElementById('statusForm');
+    const message = document.getElementById('statusMessage');
+    const button = document.getElementById('statusButton');
+    
+    form.action = `/user/${userId}/toggle-status`;
+    
+    if (isActive) {
+        message.textContent = `Are you sure you want to deactivate ${userName}?`;
+        button.innerHTML = '<i class="fas fa-pause me-2"></i>Deactivate User';
+        button.className = 'btn btn-warning';
+    } else {
+        message.textContent = `Are you sure you want to activate ${userName}?`;
+        button.innerHTML = '<i class="fas fa-play me-2"></i>Activate User';
+        button.className = 'btn btn-success';
+    }
+    
+    modal.show();
+}
+
+// Search functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('userSearch');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            const tableRows = document.querySelectorAll('tbody tr');
+            
+            tableRows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                const shouldShow = text.includes(searchTerm);
+                row.style.display = shouldShow ? '' : 'none';
+            });
+        });
+    }
+});
+</script>
+{% endblock %}

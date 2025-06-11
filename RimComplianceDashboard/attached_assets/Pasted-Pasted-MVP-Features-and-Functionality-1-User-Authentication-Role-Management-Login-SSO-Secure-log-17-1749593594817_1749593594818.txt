@@ -1,0 +1,175 @@
+Pasted--MVP-Features-and-Functionality-1-User-Authentication-Role-Management-Login-SSO-Secure-log-1749253291350.txt
+🎯 MVP Features and Functionality
+1️⃣ User Authentication & Role Management
+🔒 Login/SSO: Secure login with role-based access (GPs, RIM team, Admin).
+
+👥 Roles:
+
+GP: Completes and submits acknowledgment.
+
+RIM Team: Reviews submissions, tracks progress, manages compliance.
+
+Admin: Manages users, departments, and system configurations.
+
+2️⃣ Department & User Management
+🏢 Department Dashboard:
+
+Department Name
+
+Assigned GP(s)
+
+RIM Liaison(s)
+
+Records Owner(s)
+
+➕ Add/Edit/Delete Departments
+
+👤 User Management:
+
+Assign roles (GP, RIM Liaison)
+
+Link users to departments
+
+3️⃣ RIM Acknowledgment Form
+📝 Form Fields:
+
+Department Name (auto-populated)
+
+GP Name (auto-populated)
+
+RIM Liaison (dropdown)
+
+Retention Schedule Acknowledgment (checkbox + view schedule)
+
+Business Activity Folder Location (textbox)
+
+Key Records Managed (multi-select or free text)
+
+Acknowledgment Statement (checkbox)
+
+Additional Notes/Comments (textbox)
+
+Signature (typed name + date OR e-sign)
+
+📑 Attachments:
+
+Upload supporting documents (optional)
+
+4️⃣ Action Buttons
+✅ Submit: Save and lock acknowledgment (GP)
+
+📝 Save Draft: Save progress without submitting (GP)
+
+🔎 Review: Allows RIM team to view details
+
+🔄 Request Revision: RIM team can send back for edits
+
+📤 Export: Download submissions as PDF or Excel (Admin/RIM)
+
+5️⃣ Dashboard & Status Tracking
+📊 GP Dashboard:
+
+Status indicators (Not Started, In Progress, Submitted, Approved)
+
+Due Date/Deadline
+
+📈 RIM Team Dashboard:
+
+Department overview (status, GP name, submission date)
+
+Filter by department, status, or due date
+
+6️⃣ Notifications & Reminders
+🔔 Automated Email Notifications:
+
+Remind GPs of upcoming due dates
+
+Notify RIM team when acknowledgment is submitted
+
+Alert for overdue acknowledgments
+
+7️⃣ Audit Trail
+📜 Change Log:
+
+Track every action (user, timestamp, action type)
+
+Useful for compliance and audit readiness
+
+🖥️ Front-End UI Design (Suggested Layout)
+Header/NavBar
+🏠 Home
+
+📋 Dashboard
+
+📝 Acknowledgment Form
+
+👥 Departments
+
+📊 Reports
+
+🔒 Logout
+
+Main Pages
+1. Dashboard
+Table/List view:
+| Department | GP | Status | Due Date | Last Updated | Actions |
+
+Filters: Department, Status, Date Range
+
+Buttons: View Form, Submit, Download
+
+2. Acknowledgment Form Page
+Title: RIM Program Acknowledgment Form
+
+Department Name (auto-filled)
+
+GP Name (auto-filled)
+
+RIM Liaison (dropdown)
+
+Retention Schedule (link/button to view)
+
+Textbox: Business Activity Folder Location
+
+Textarea: Key Records Managed
+
+Checkbox: "I acknowledge my responsibilities"
+
+Textarea: Additional Notes
+
+Signature: Typed name + date picker
+
+Buttons: Save Draft, Submit, Cancel
+
+3. Department Management Page
+Table view:
+| Department Name | GP | RIM Liaison | Actions (Edit/Delete) |
+
+Button: Add Department
+
+4. Notifications Page
+Table view:
+| Notification | Recipient | Status | Date Sent |
+
+🛠️ Technical Notes for Engineer
+Tech Stack Recommendation:
+Front-End: React.js (with Material-UI or Tailwind CSS for clean design)
+
+Back-End: Node.js/Express with PostgreSQL or MongoDB (depending on your preference)
+
+Authentication: Auth0, Azure AD, or in-house JWT-based login
+
+Document Uploads: AWS S3 or similar cloud storage
+
+Audit Logging: Middleware to capture user actions
+
+PDF Export: PDFKit or Puppeteer (for form exports)
+
+🔑 Scalability & Future Enhancements
+E-signature integration (e.g. DocuSign API)
+
+Integration with the company's compliance management tools
+
+Bulk upload for training records or retention schedules
+
+Reporting dashboard with charts/graphs

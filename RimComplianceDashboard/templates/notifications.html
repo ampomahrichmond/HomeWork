@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+
+{% block title %}Notifications - RPA Magic{% endblock %}
+
+{% block content %}
+<div class="notifications-page">
+    <div class="page-header mb-4">
+        <div class="row align-items-center">
+            <div class="col">
+                <h1 class="display-6 fw-bold mb-0">
+                    <i class="fas fa-bell text-mustard me-2"></i>Notifications
+                </h1>
+                <p class="text-muted mb-0">Your system notifications and alerts</p>
+            </div>
+            <div class="col-auto">
+                {% if notifications %}
+                <button type="button" class="btn btn-outline-secondary" onclick="markAllAsRead()">
+                    <i class="fas fa-check-double me-2"></i>Mark All as Read
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="notifications-list">
+        {% if notifications %}
+        <div class="card">
+            <div class="card-header bg-mustard text-dark">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-inbox me-2"></i>Your Notifications
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for notification in notifications %}
+                    <div class="list-group-item {% if not notification.is_read %}list-group-item-warning{% endif %}">
+                        <div class="d-flex w-100 justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <div class="d-flex align-items-center mb-2">
+                                    <div class="notification-icon me-3">
+                                        {% if notification.notification_type == 'success' %}
+                                            <i class="fas fa-check-circle text-success fa-lg"></i>
+                                        {% elif notification.notification_type == 'warning' %}
+                                            <i class="fas fa-exclamation-triangle text-warning fa-lg"></i>
+                                        {% elif notification.notification_type == 'error' %}
+                                            <i class="fas fa-times-circle text-danger fa-lg"></i>
+                                        {% else %}
+                                            <i class="fas fa-info-circle text-info fa-lg"></i>
+                                        {% endif %}
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1 fw-semibold">{{ notification.title }}</h6>
+                                        <p class="mb-1">{{ notification.message }}</p>
+                                    </div>
+                                    {% if not notification.is_read %}
+                                    <div class="notification-badge">
+                                        <span class="badge bg-primary">New</span>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="notification-meta d-flex align-items-center text-muted small">
+                                    <i class="fas fa-clock me-1"></i>
+                                    <span>{{ notification.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                                    
+                                    {% if notification.acknowledgment %}
+                                    <span class="mx-2">•</span>
+                                    <i class="fas fa-file-signature me-1"></i>
+                                    <a href="{{ url_for('acknowledgment_form', id=notification.acknowledgment.id) }}" 
+                                       class="text-decoration-none">
+                                        View Acknowledgment
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <div class="notification-actions ms-3">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    {% if not notification.is_read %}
+                                    <button type="button" class="btn btn-outline-primary" 
+                                            onclick="markAsRead({{ notification.id }})"
+                                            title="Mark as Read">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                    {% endif %}
+                                    <button type="button" class="btn btn-outline-danger" 
+                                            onclick="deleteNotification({{ notification.id }})"
+                                            title="Delete">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Pagination could be added here if needed -->
+        {% if notifications|length >= 50 %}
+        <div class="text-center mt-4">
+            <p class="text-muted">
+                <i class="fas fa-info-circle me-1"></i>
+                Showing the most recent 50 notifications. Older notifications are automatically archived.
+            </p>
+        </div>
+        {% endif %}
+        
+        {% else %}
+        <div class="empty-state text-center py-5">
+            <div class="empty-state-icon mb-4">
+                <i class="fas fa-bell-slash fa-4x text-muted"></i>
+            </div>
+            <h4 class="text-muted">No Notifications</h4>
+            <p class="text-muted mb-4">
+                You don't have any notifications at the moment. 
+                You'll receive notifications here when:
+            </p>
+            <div class="notification-types row justify-content-center">
+                <div class="col-md-8">
+                    <div class="row text-start">
+                        <div class="col-md-6">
+                            <ul class="list-unstyled">
+                                <li class="mb-2">
+                                    <i class="fas fa-paper-plane text-info me-2"></i>
+                                    Acknowledgments are submitted
+                                </li>
+                                <li class="mb-2">
+                                    <i class="fas fa-check text-success me-2"></i>
+                                    Submissions are approved
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <ul class="list-unstyled">
+                                <li class="mb-2">
+                                    <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                                    Revisions are requested
+                                </li>
+                                <li class="mb-2">
+                                    <i class="fas fa-calendar text-primary me-2"></i>
+                                    Deadlines are approaching
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Delete Notification</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center">
+                    <i class="fas fa-trash fa-3x text-danger mb-3"></i>
+                    <h6>Are you sure you want to delete this notification?</h6>
+                    <p class="text-muted mb-0">This action cannot be undone.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="POST" id="deleteForm" class="d-inline">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash me-2"></i>Delete
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function markAsRead(notificationId) {
+    fetch(`/notification/${notificationId}/mark-read`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('meta[name=csrf-token]').getAttribute('content')
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Remove the "New" badge and highlighting
+            const listItem = document.querySelector(`[data-notification-id="${notificationId}"]`);
+            if (listItem) {
+                listItem.classList.remove('list-group-item-warning');
+                const badge = listItem.querySelector('.badge');
+                if (badge) {
+                    badge.remove();
+                }
+                const markButton = listItem.querySelector('.btn-outline-primary');
+                if (markButton) {
+                    markButton.remove();
+                }
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error marking notification as read:', error);
+    });
+}
+
+function markAllAsRead() {
+    if (confirm('Mark all notifications as read?')) {
+        fetch('/notifications/mark-all-read', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name=csrf-token]').getAttribute('content')
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            }
+        })
+        .catch(error => {
+            console.error('Error marking all notifications as read:', error);
+        });
+    }
+}
+
+function deleteNotification(notificationId) {
+    const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    const form = document.getElementById('deleteForm');
+    
+    form.action = `/notification/${notificationId}/delete`;
+    modal.show();
+}
+
+// Auto-refresh notifications every 30 seconds
+function refreshNotifications() {
+    fetch('/api/notifications/count')
+        .then(response => response.json())
+        .then(data => {
+            const badge = document.getElementById('notification-count');
+            if (badge) {
+                if (data.count > 0) {
+                    badge.textContent = data.count;
+                    badge.style.display = 'inline';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        })
+        .catch(error => console.error('Error refreshing notifications:', error));
+}
+
+setInterval(refreshNotifications, 30000);
+
+// Mark notifications as read when scrolled into view
+document.addEventListener('DOMContentLoaded', function() {
+    const unreadNotifications = document.querySelectorAll('.list-group-item-warning');
+    
+    if (unreadNotifications.length > 0 && 'IntersectionObserver' in window) {
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const notificationId = entry.target.getAttribute('data-notification-id');
+                    if (notificationId) {
+                        // Auto-mark as read after 3 seconds of being visible
+                        setTimeout(() => {
+                            if (entry.target.classList.contains('list-group-item-warning')) {
+                                markAsRead(notificationId);
+                            }
+                        }, 3000);
+                    }
+                }
+            });
+        }, { threshold: 0.5 });
+        
+        unreadNotifications.forEach(notification => {
+            observer.observe(notification);
+        });
+    }
+});
+</script>
+{% endblock %}

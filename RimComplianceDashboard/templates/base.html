@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}RPA Magic - RIM Compliance System{% endblock %}</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+    
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <!-- Top Bar -->
+    <nav class="navbar navbar-dark bg-mustard fixed-top">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="{{ url_for('dashboard') }}">
+                <i class="fas fa-magic me-2"></i>RPA Magic
+            </a>
+            
+            <div class="d-flex align-items-center">
+                <button class="btn btn-outline-light me-2" id="sidebarToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="dropdown">
+                    <button class="btn btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-bell me-1"></i>
+                        <span class="badge bg-danger ms-1" id="notification-count" style="display: none;">0</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="{{ url_for('notifications') }}">View All Notifications</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Left Sidebar -->
+    <div id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+            <h5 class="text-white mb-0">
+                <i class="fas fa-folder-open me-2"></i>RIM System
+            </h5>
+        </div>
+        
+        <div class="sidebar-menu">
+            <a href="{{ url_for('dashboard') }}" class="sidebar-btn">
+                <i class="fas fa-tachometer-alt"></i>
+                <span>Dashboard</span>
+            </a>
+            
+            <div class="sidebar-section">
+                <h6 class="sidebar-section-title">Acknowledgments</h6>
+                <a href="{{ url_for('acknowledgment_form') }}" class="sidebar-btn">
+                    <i class="fas fa-plus-circle"></i>
+                    <span>New Acknowledgment</span>
+                </a>
+                <a href="{{ url_for('in_progress') }}" class="sidebar-btn">
+                    <i class="fas fa-clock"></i>
+                    <span>In Progress</span>
+                </a>
+                <a href="{{ url_for('submitted') }}" class="sidebar-btn">
+                    <i class="fas fa-paper-plane"></i>
+                    <span>Submitted</span>
+                </a>
+                <a href="{{ url_for('approved') }}" class="sidebar-btn">
+                    <i class="fas fa-check-circle"></i>
+                    <span>Approved</span>
+                </a>
+            </div>
+            
+            <div class="sidebar-section">
+                <h6 class="sidebar-section-title">Management</h6>
+                <a href="{{ url_for('departments') }}" class="sidebar-btn">
+                    <i class="fas fa-building"></i>
+                    <span>Departments</span>
+                </a>
+                <a href="{{ url_for('users') }}" class="sidebar-btn">
+                    <i class="fas fa-users"></i>
+                    <span>Users & Liaisons</span>
+                </a>
+            </div>
+            
+            <div class="sidebar-section">
+                <h6 class="sidebar-section-title">Reports</h6>
+                <a href="{{ url_for('compliance_report') }}" class="sidebar-btn">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Compliance Report</span>
+                </a>
+                <a href="{{ url_for('audit_trail') }}" class="sidebar-btn">
+                    <i class="fas fa-clipboard-list"></i>
+                    <span>Audit Trail</span>
+                </a>
+                <a href="{{ url_for('export_pdf') }}" class="sidebar-btn">
+                    <i class="fas fa-file-pdf"></i>
+                    <span>Export PDF</span>
+                </a>
+            </div>
+            
+            <div class="sidebar-section">
+                <h6 class="sidebar-section-title">System</h6>
+                <a href="{{ url_for('notifications') }}" class="sidebar-btn">
+                    <i class="fas fa-bell"></i>
+                    <span>Notifications</span>
+                </a>
+                <a href="{{ url_for('login') }}" class="sidebar-btn">
+                    <i class="fas fa-sign-in-alt"></i>
+                    <span>Login</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar Overlay -->
+    <div id="sidebarOverlay" class="sidebar-overlay"></div>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container-fluid">
+            <!-- Flash Messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-light py-4 mt-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5><i class="fas fa-magic me-2"></i>RPA Magic</h5>
+                    <p class="mb-0">Records & Information Management Compliance System</p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="mb-0">&copy; 2025 RPA Magic. All rights reserved.</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    
+    <!-- Sidebar Toggle Script -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebarOverlay');
+        const mainContent = document.querySelector('.main-content');
+        
+        // Check localStorage for sidebar state
+        const sidebarState = localStorage.getItem('sidebarOpen');
+        const isDesktop = window.innerWidth > 768;
+        
+        function showSidebar() {
+            sidebar.classList.add('show');
+            if (window.innerWidth <= 768) {
+                sidebarOverlay.classList.add('show');
+            }
+            mainContent.classList.add('sidebar-open');
+            localStorage.setItem('sidebarOpen', 'true');
+        }
+        
+        function hideSidebar() {
+            sidebar.classList.remove('show');
+            sidebarOverlay.classList.remove('show');
+            mainContent.classList.remove('sidebar-open');
+            localStorage.setItem('sidebarOpen', 'false');
+        }
+        
+        function toggleSidebar() {
+            if (sidebar.classList.contains('show')) {
+                hideSidebar();
+            } else {
+                showSidebar();
+            }
+        }
+        
+        // Initialize sidebar state based on localStorage and screen size
+        if (sidebarState === 'true' || (sidebarState === null && isDesktop)) {
+            showSidebar();
+        } else {
+            hideSidebar();
+        }
+        
+        // Toggle sidebar when button is clicked
+        if (sidebarToggle) {
+            sidebarToggle.addEventListener('click', function(e) {
+                e.preventDefault();
+                toggleSidebar();
+            });
+        }
+        
+        // Close sidebar when overlay is clicked (mobile only)
+        if (sidebarOverlay) {
+            sidebarOverlay.addEventListener('click', function() {
+                if (window.innerWidth <= 768) {
+                    hideSidebar();
+                }
+            });
+        }
+        
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            if (window.innerWidth <= 768) {
+                // On mobile, always hide overlay but keep sidebar state
+                sidebarOverlay.classList.remove('show');
+            } else {
+                // On desktop, restore sidebar state without overlay
+                if (sidebar.classList.contains('show')) {
+                    sidebarOverlay.classList.remove('show');
+                }
+            }
+        });
+        
+        // Highlight active menu item
+        const currentPath = window.location.pathname;
+        const sidebarLinks = document.querySelectorAll('.sidebar-btn');
+        
+        sidebarLinks.forEach(link => {
+            const linkPath = link.getAttribute('href');
+            if (linkPath && (linkPath === currentPath || (currentPath.startsWith(linkPath) && linkPath !== '/'))) {
+                link.classList.add('active');
+            }
+        });
+        
+        // Prevent sidebar from closing when clicking sidebar links on desktop
+        sidebarLinks.forEach(link => {
+            link.addEventListener('click', function() {
+                // On mobile, close sidebar after navigation
+                if (window.innerWidth <= 768) {
+                    setTimeout(hideSidebar, 100);
+                }
+            });
+        });
+    });
+    </script>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>

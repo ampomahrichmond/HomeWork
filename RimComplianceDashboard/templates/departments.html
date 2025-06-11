@@ -1,0 +1,359 @@
+{% extends "base.html" %}
+
+{% block title %}Departments - RPA Magic{% endblock %}
+
+{% block content %}
+<div class="departments-page">
+    <div class="page-header mb-4">
+        <div class="row align-items-center">
+            <div class="col">
+                <h1 class="display-6 fw-bold mb-0">
+                    <i class="fas fa-building text-mustard me-2"></i>Departments
+                </h1>
+                <p class="text-muted mb-0">Manage organizational departments and assignments</p>
+            </div>
+            <div class="col-auto">
+                <div class="d-flex gap-2">
+                    <!-- Bulk Actions -->
+                    <div class="btn-group" id="bulkActions" style="display: none;">
+                        <button type="button" class="btn btn-outline-danger" onclick="deleteSelectedDepartments()">
+                            <i class="fas fa-trash me-2"></i>Delete Selected
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="clearSelection()">
+                            <i class="fas fa-times me-2"></i>Clear Selection
+                        </button>
+                    </div>
+                    
+                    <!-- Add Department -->
+                    <a href="{{ url_for('department_form') }}" class="btn btn-mustard">
+                        <i class="fas fa-plus me-2"></i>Add Department
+                    </a>
+                    
+                    <!-- Select All Toggle -->
+                    <button type="button" class="btn btn-outline-mustard" onclick="toggleSelectAll()">
+                        <i class="fas fa-check-square me-2"></i>Select All
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="departments-list">
+        {% if departments %}
+        <div class="row g-4">
+            {% for department in departments %}
+            <div class="col-lg-6 col-xl-4">
+                <div class="card department-card h-100 shadow-sm" data-department-id="{{ department.id }}">
+                    <div class="card-header bg-mustard text-dark">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div class="d-flex align-items-center">
+                                <div class="form-check me-3">
+                                    <input class="form-check-input department-checkbox" type="checkbox" 
+                                           value="{{ department.id }}" id="dept-{{ department.id }}"
+                                           onchange="updateBulkActions()">
+                                </div>
+                                <h5 class="card-title mb-0">
+                                    <i class="fas fa-building me-2"></i>{{ department.name }}
+                                </h5>
+                            </div>
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-dark" type="button" data-bs-toggle="dropdown">
+                                    <i class="fas fa-ellipsis-v"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li>
+                                        <a class="dropdown-item" href="{{ url_for('department_form', id=department.id) }}">
+                                            <i class="fas fa-edit me-2"></i>Edit
+                                        </a>
+                                    </li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <button class="dropdown-item text-danger" onclick="deleteDepartment({{ department.id }}, '{{ department.name }}')">
+                                            <i class="fas fa-trash me-2"></i>Delete
+                                        </button>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        {% if department.description %}
+                        <p class="card-text text-muted mb-3">{{ department.description }}</p>
+                        {% endif %}
+                        
+                        <!-- Department Statistics -->
+                        <div class="department-stats mb-3">
+                            <div class="row text-center">
+                                <div class="col-4">
+                                    <div class="stat-item">
+                                        <div class="stat-number text-primary">{{ department.users|length }}</div>
+                                        <div class="stat-label small text-muted">Users</div>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="stat-item">
+                                        <div class="stat-number text-success">
+                                            {{ department.users|selectattr('role', 'equalto', 'GP')|list|length }}
+                                        </div>
+                                        <div class="stat-label small text-muted">GPs</div>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="stat-item">
+                                        <div class="stat-number text-info">
+                                            {{ department.acknowledgments.count() }}
+                                        </div>
+                                        <div class="stat-label small text-muted">Acknowledgments</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Department Users -->
+                        {% if department.users %}
+                        <div class="department-users">
+                            <h6 class="fw-semibold mb-2">
+                                <i class="fas fa-users me-1"></i>Assigned Users
+                            </h6>
+                            <div class="users-list">
+                                {% for user in department.users[:5] %}
+                                <div class="user-item d-flex align-items-center mb-2">
+                                    <div class="user-avatar me-2">
+                                        <i class="fas fa-user-circle text-muted"></i>
+                                    </div>
+                                    <div class="user-info flex-grow-1">
+                                        <div class="user-name small fw-semibold">{{ user.full_name }}</div>
+                                        <div class="user-role small text-muted">{{ user.role }}</div>
+                                    </div>
+                                    <div class="user-status">
+                                        {% if user.is_active %}
+                                            <span class="badge bg-success bg-opacity-25 text-success">Active</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary bg-opacity-25 text-secondary">Inactive</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                                {% if department.users|length > 5 %}
+                                <div class="small text-muted">
+                                    ... and {{ department.users|length - 5 }} more users
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="no-users text-center py-3">
+                            <i class="fas fa-user-slash fa-2x text-muted mb-2"></i>
+                            <p class="text-muted mb-0">No users assigned</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="card-footer bg-transparent">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <small class="text-muted">
+                                Created: {{ utils.format_date(department.created_at) }}
+                            </small>
+                            {% if current_user.role == 'Admin' %}
+                            <a href="{{ url_for('department_form', id=department.id) }}" 
+                               class="btn btn-sm btn-outline-mustard">
+                                <i class="fas fa-edit me-1"></i>Edit
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state text-center py-5">
+            <i class="fas fa-building fa-3x text-muted mb-3"></i>
+            <h5 class="text-muted">No Departments Found</h5>
+            <p class="text-muted mb-3">
+                No departments have been created yet. Create your first department to get started.
+            </p>
+            {% if current_user.role == 'Admin' %}
+                <a href="{{ url_for('department_form') }}" class="btn btn-mustard">
+                    <i class="fas fa-plus me-2"></i>Create First Department
+                </a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Deletion</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center">
+                    <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
+                    <h6>Are you sure you want to delete this department?</h6>
+                    <p class="text-muted mb-0" id="deleteMessage"></p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="POST" id="deleteForm" class="d-inline">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash me-2"></i>Delete Department
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Department Management JavaScript -->
+<script>
+let isSelectAllMode = false;
+
+function updateBulkActions() {
+    const checkedBoxes = document.querySelectorAll('.department-checkbox:checked');
+    const bulkActions = document.getElementById('bulkActions');
+    
+    if (checkedBoxes.length > 0) {
+        bulkActions.style.display = 'block';
+    } else {
+        bulkActions.style.display = 'none';
+    }
+}
+
+function toggleSelectAll() {
+    const selectAllBtn = document.querySelector('button[onclick="toggleSelectAll()"]');
+    const checkboxes = document.querySelectorAll('.department-checkbox');
+    
+    if (!isSelectAllMode) {
+        // Select all
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = true;
+        });
+        selectAllBtn.innerHTML = '<i class="fas fa-square me-2"></i>Deselect All';
+        isSelectAllMode = true;
+    } else {
+        // Deselect all
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        selectAllBtn.innerHTML = '<i class="fas fa-check-square me-2"></i>Select All';
+        isSelectAllMode = false;
+    }
+    
+    updateBulkActions();
+}
+
+function clearSelection() {
+    const checkboxes = document.querySelectorAll('.department-checkbox');
+    const selectAllBtn = document.querySelector('button[onclick="toggleSelectAll()"]');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    
+    selectAllBtn.innerHTML = '<i class="fas fa-check-square me-2"></i>Select All';
+    isSelectAllMode = false;
+    updateBulkActions();
+}
+
+function deleteSelectedDepartments() {
+    const checkedBoxes = document.querySelectorAll('.department-checkbox:checked');
+    
+    if (checkedBoxes.length === 0) {
+        alert('Please select departments to delete.');
+        return;
+    }
+    
+    const departmentIds = Array.from(checkedBoxes).map(cb => cb.value);
+    const departmentNames = Array.from(checkedBoxes).map(cb => {
+        const card = cb.closest('.department-card');
+        return card.querySelector('.card-title').textContent.trim().replace('🏢 ', '');
+    });
+    
+    const confirmMessage = `Are you sure you want to delete the following departments?\n\n${departmentNames.join('\n')}\n\nThis action cannot be undone.`;
+    
+    if (confirm(confirmMessage)) {
+        // Send AJAX request to delete departments
+        fetch('/departments/bulk-delete', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                department_ids: departmentIds
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Remove deleted department cards from DOM
+                checkedBoxes.forEach(cb => {
+                    const card = cb.closest('.col-lg-6');
+                    card.remove();
+                });
+                
+                clearSelection();
+                
+                // Show success message
+                const alert = document.createElement('div');
+                alert.className = 'alert alert-success alert-dismissible fade show';
+                alert.innerHTML = `
+                    <i class="fas fa-check-circle me-2"></i>
+                    Successfully deleted ${data.deleted_count} department(s).
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                
+                const pageHeader = document.querySelector('.page-header');
+                pageHeader.insertAdjacentElement('afterend', alert);
+                
+                // Auto-dismiss after 5 seconds
+                setTimeout(() => {
+                    if (alert.parentNode) {
+                        alert.remove();
+                    }
+                }, 5000);
+            } else {
+                alert('Error deleting departments: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while deleting departments.');
+        });
+    }
+}
+
+function deleteDepartment(id, name) {
+    const confirmMessage = `Are you sure you want to delete the department "${name}"?\n\nThis action cannot be undone.`;
+    
+    if (confirm(confirmMessage)) {
+        window.location.href = `/departments/${id}/delete`;
+    }
+}
+
+// Add card click selection functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const departmentCards = document.querySelectorAll('.department-card');
+    
+    departmentCards.forEach(card => {
+        card.addEventListener('click', function(e) {
+            // Don't trigger on checkbox, dropdown, or button clicks
+            if (e.target.type === 'checkbox' || 
+                e.target.closest('.dropdown') || 
+                e.target.closest('button') || 
+                e.target.closest('a')) {
+                return;
+            }
+            
+            const checkbox = card.querySelector('.department-checkbox');
+            checkbox.checked = !checkbox.checked;
+            updateBulkActions();
+        });
+    });
+});
+</script>
+{% endblock %}

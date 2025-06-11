@@ -1,0 +1,488 @@
+{% extends "base.html" %}
+
+{% block title %}
+{% if acknowledgment %}Edit Acknowledgment{% else %}New Acknowledgment{% endif %} - RPA Magic
+{% endblock %}
+
+{% block content %}
+<div class="acknowledgment-form">
+    <div class="form-header mb-4">
+        <div class="row align-items-center">
+            <div class="col">
+                <h1 class="display-6 fw-bold mb-0">
+                    <i class="fas fa-file-signature text-mustard me-2"></i>
+                    {% if acknowledgment %}Edit Acknowledgment{% else %}RIM Program Acknowledgment Form{% endif %}
+                </h1>
+                <p class="text-muted mb-0">
+                    {% if acknowledgment %}
+                        Status: <span class="badge {{ utils.get_status_badge_class(acknowledgment.status) }}">{{ acknowledgment.status }}</span>
+                    {% else %}
+                        Complete this form to acknowledge your RIM program responsibilities
+                    {% endif %}
+                </p>
+            </div>
+            <div class="col-auto">
+                <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-mustard text-dark">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-form me-2"></i>Acknowledgment Details
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data" id="acknowledgmentForm">
+                        {{ form.hidden_tag() }}
+                        
+                        <!-- Selectable fields -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">{{ form.department_id.label }}</label>
+                                {{ form.department_id(class="form-select") }}
+                                {% if form.department_id.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.department_id.errors %}
+                                            <div>{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">{{ form.gp_id.label }}</label>
+                                {{ form.gp_id(class="form-select") }}
+                                {% if form.gp_id.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.gp_id.errors %}
+                                            <div>{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- RIM Liaison -->
+                        <div class="mb-4">
+                            {{ form.rim_liaison_id.label(class="form-label fw-semibold") }}
+                            {{ form.rim_liaison_id(class="form-select") }}
+                            {% if form.rim_liaison_id.errors %}
+                                <div class="text-danger small mt-1">
+                                    {% for error in form.rim_liaison_id.errors %}
+                                        <div>{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Retention Schedule -->
+                        <div class="mb-4">
+                            <div class="retention-schedule-section p-3 bg-light rounded">
+                                <h6 class="fw-semibold mb-3">
+                                    <i class="fas fa-calendar-alt me-2 text-mustard"></i>Retention Schedule
+                                </h6>
+                                <div class="form-check mb-3">
+                                    {{ form.retention_schedule_acknowledged(class="form-check-input") }}
+                                    {{ form.retention_schedule_acknowledged.label(class="form-check-label") }}
+                                    <button type="button" class="btn btn-link btn-sm p-0 ms-2" onclick="viewRetentionSchedule()">
+                                        <i class="fas fa-external-link-alt"></i> View Schedule
+                                    </button>
+                                </div>
+                                {% if form.retention_schedule_acknowledged.errors %}
+                                    <div class="text-danger small">
+                                        {% for error in form.retention_schedule_acknowledged.errors %}
+                                            <div>{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Business Activity Folder Location -->
+                        <div class="mb-4">
+                            {{ form.business_activity_folder_location.label(class="form-label fw-semibold") }}
+                            {{ form.business_activity_folder_location(class="form-control", rows="3", placeholder="Specify the location of your business activity folders (e.g., shared drive path, file cabinet location, etc.)") }}
+                            {% if form.business_activity_folder_location.errors %}
+                                <div class="text-danger small mt-1">
+                                    {% for error in form.business_activity_folder_location.errors %}
+                                        <div>{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Key Records Managed -->
+                        <div class="mb-4">
+                            {{ form.key_records_managed.label(class="form-label fw-semibold") }}
+                            {{ form.key_records_managed(class="form-control", rows="4", placeholder="List the key types of records you manage (e.g., contracts, financial records, employee files, etc.)") }}
+                            {% if form.key_records_managed.errors %}
+                                <div class="text-danger small mt-1">
+                                    {% for error in form.key_records_managed.errors %}
+                                        <div>{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Additional Notes -->
+                        <div class="mb-4">
+                            {{ form.additional_notes.label(class="form-label fw-semibold") }}
+                            {{ form.additional_notes(class="form-control", rows="3", placeholder="Any additional comments or notes regarding your RIM compliance...") }}
+                            {% if form.additional_notes.errors %}
+                                <div class="text-danger small mt-1">
+                                    {% for error in form.additional_notes.errors %}
+                                        <div>{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- File Attachments -->
+                        <div class="mb-4">
+                            {{ form.attachments.label(class="form-label fw-semibold") }}
+                            {{ form.attachments(class="form-control", accept=".pdf,.doc,.docx,.txt,.jpg,.png", multiple=true) }}
+                            <div class="form-text">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Upload supporting documents (PDF, DOC, DOCX, TXT, JPG, PNG). Maximum file size: 16MB each.
+                            </div>
+                            {% if form.attachments.errors %}
+                                <div class="text-danger small mt-1">
+                                    {% for error in form.attachments.errors %}
+                                        <div>{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            
+                            <!-- Existing attachments -->
+                            {% if acknowledgment and acknowledgment.attachments.count() > 0 %}
+                                <div class="existing-attachments mt-3">
+                                    <h6 class="fw-semibold">Existing Attachments:</h6>
+                                    <ul class="list-unstyled">
+                                        {% for attachment in acknowledgment.attachments.all() %}
+                                            <li class="d-flex align-items-center mb-2">
+                                                <i class="fas fa-paperclip me-2 text-muted"></i>
+                                                <a href="{{ url_for('download_file', filename=attachment.filename) }}" 
+                                                   class="text-decoration-none me-2">
+                                                    {{ attachment.original_filename }}
+                                                </a>
+                                                <small class="text-muted">
+                                                    ({{ "%.1f"|format(attachment.file_size / 1024) }} KB)
+                                                </small>
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Acknowledgment Statement -->
+                        <div class="mb-4">
+                            <div class="acknowledgment-section p-4 bg-warning bg-opacity-10 border border-warning rounded">
+                                <h6 class="fw-semibold mb-3 text-warning-emphasis">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>Acknowledgment Statement
+                                </h6>
+                                <div class="form-check mb-3">
+                                    {{ form.acknowledgment_statement(class="form-check-input", required=true) }}
+                                    {{ form.acknowledgment_statement.label(class="form-check-label fw-semibold") }}
+                                </div>
+                                {% if form.acknowledgment_statement.errors %}
+                                    <div class="text-danger small">
+                                        {% for error in form.acknowledgment_statement.errors %}
+                                            <div>{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                                <div class="acknowledgment-text mt-3 p-3 bg-white rounded border">
+                                    <small class="text-muted">
+                                        By checking this box, I acknowledge that I understand my responsibilities 
+                                        under the Records and Information Management (RIM) program, including:
+                                        <ul class="mt-2 mb-0">
+                                            <li>Proper classification and retention of records</li>
+                                            <li>Compliance with retention schedules</li>
+                                            <li>Secure handling of confidential information</li>
+                                            <li>Timely destruction of records per approved schedules</li>
+                                            <li>Cooperation with audit and legal hold requirements</li>
+                                        </ul>
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Digital Signature -->
+                        <div class="mb-4">
+                            <div class="signature-section p-3 bg-light rounded">
+                                <h6 class="fw-semibold mb-3">
+                                    <i class="fas fa-signature me-2 text-mustard"></i>Digital Signature
+                                </h6>
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        {{ form.signature_name.label(class="form-label fw-semibold") }}
+                                        {{ form.signature_name(class="form-control", placeholder="Type your full name") }}
+                                        {% if form.signature_name.errors %}
+                                            <div class="text-danger small mt-1">
+                                                {% for error in form.signature_name.errors %}
+                                                    <div>{{ error }}</div>
+                                                {% endfor %}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-4">
+                                        {{ form.signature_date.label(class="form-label fw-semibold") }}
+                                        {{ form.signature_date(class="form-control") }}
+                                        {% if form.signature_date.errors %}
+                                            <div class="text-danger small mt-1">
+                                                {% for error in form.signature_date.errors %}
+                                                    <div>{{ error }}</div>
+                                                {% endfor %}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Form Actions -->
+                        <div class="form-actions d-flex gap-2 justify-content-end pt-3 border-top">
+                            <button type="button" class="btn btn-outline-secondary" onclick="history.back()">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </button>
+                            <button type="submit" class="btn btn-outline-mustard" onclick="setAction('save_draft')">
+                                <i class="fas fa-save me-2"></i>Save Draft
+                            </button>
+                            <button type="submit" class="btn btn-mustard" onclick="setAction('submit')">
+                                <i class="fas fa-paper-plane me-2"></i>Submit Acknowledgment
+                            </button>
+                        </div>
+
+                        {{ form.action() }}
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <div class="sticky-top" style="top: 100px;">
+                <!-- Help Card -->
+                <div class="card mb-4">
+                    <div class="card-header bg-info text-white">
+                        <h6 class="card-title mb-0">
+                            <i class="fas fa-question-circle me-2"></i>Need Help?
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="help-item mb-3">
+                            <h6 class="fw-semibold">Retention Schedule</h6>
+                            <p class="small text-muted mb-0">
+                                Review your department's retention schedule to understand 
+                                how long different types of records must be kept.
+                            </p>
+                        </div>
+                        <div class="help-item mb-3">
+                            <h6 class="fw-semibold">Business Activity Folders</h6>
+                            <p class="small text-muted mb-0">
+                                Specify where your department stores its business records 
+                                and documents for easy retrieval.
+                            </p>
+                        </div>
+                        <div class="help-item">
+                            <h6 class="fw-semibold">Supporting Documents</h6>
+                            <p class="small text-muted mb-0">
+                                Upload any relevant documents such as training certificates, 
+                                policies, or procedural documentation.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Status Guide -->
+                <div class="card">
+                    <div class="card-header bg-secondary text-white">
+                        <h6 class="card-title mb-0">
+                            <i class="fas fa-info-circle me-2"></i>Status Guide
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="status-guide">
+                            <div class="status-item d-flex align-items-center mb-2">
+                                <span class="badge bg-secondary me-2">Not Started</span>
+                                <small class="text-muted">Initial state</small>
+                            </div>
+                            <div class="status-item d-flex align-items-center mb-2">
+                                <span class="badge bg-warning text-dark me-2">In Progress</span>
+                                <small class="text-muted">Draft saved</small>
+                            </div>
+                            <div class="status-item d-flex align-items-center mb-2">
+                                <span class="badge bg-info me-2">Submitted</span>
+                                <small class="text-muted">Under review</small>
+                            </div>
+                            <div class="status-item d-flex align-items-center mb-2">
+                                <span class="badge bg-success me-2">Approved</span>
+                                <small class="text-muted">Complete</small>
+                            </div>
+                            <div class="status-item d-flex align-items-center">
+                                <span class="badge bg-danger me-2">Needs Revision</span>
+                                <small class="text-muted">Requires changes</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Retention Schedule Modal -->
+<div class="modal fade" id="retentionScheduleModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-calendar-alt me-2"></i>Retention Schedule
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="retention-schedule-content">
+                    <p class="mb-3">
+                        <strong>{{ current_user.department.name if current_user.department else 'General' }} Department Retention Schedule</strong>
+                    </p>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Record Type</th>
+                                    <th>Retention Period</th>
+                                    <th>Disposition</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Financial Records</td>
+                                    <td>7 years</td>
+                                    <td>Destroy</td>
+                                </tr>
+                                <tr>
+                                    <td>Contracts</td>
+                                    <td>10 years after expiration</td>
+                                    <td>Archive then destroy</td>
+                                </tr>
+                                <tr>
+                                    <td>Employee Records</td>
+                                    <td>7 years after termination</td>
+                                    <td>Confidential destruction</td>
+                                </tr>
+                                <tr>
+                                    <td>Email Communications</td>
+                                    <td>3 years</td>
+                                    <td>Automatic deletion</td>
+                                </tr>
+                                <tr>
+                                    <td>Meeting Minutes</td>
+                                    <td>Permanent</td>
+                                    <td>Archive</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        This is a sample retention schedule. Contact your RIM liaison for 
+                        the complete and current retention schedule specific to your department.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function setAction(action) {
+    document.getElementById('action').value = action;
+}
+
+function viewRetentionSchedule() {
+    const modal = new bootstrap.Modal(document.getElementById('retentionScheduleModal'));
+    modal.show();
+}
+
+// Set today's date as default for signature date
+document.addEventListener('DOMContentLoaded', function() {
+    const signatureDateField = document.getElementById('signature_date');
+    if (signatureDateField && !signatureDateField.value) {
+        const today = new Date().toISOString().split('T')[0];
+        signatureDateField.value = today;
+    }
+    
+    // Auto-populate signature name with current user's name
+    const signatureNameField = document.getElementById('signature_name');
+    if (signatureNameField && !signatureNameField.value) {
+        signatureNameField.value = '{{ current_user.full_name }}';
+    }
+});
+
+// Form validation
+document.getElementById('acknowledgmentForm').addEventListener('submit', function(e) {
+    const action = document.getElementById('action').value;
+    
+    if (action === 'submit') {
+        // Additional validation for submit
+        const acknowledgmentChecked = document.getElementById('acknowledgment_statement').checked;
+        const signatureName = document.getElementById('signature_name').value.trim();
+        const signatureDate = document.getElementById('signature_date').value;
+        
+        if (!acknowledgmentChecked) {
+            e.preventDefault();
+            alert('You must acknowledge your responsibilities before submitting.');
+            return false;
+        }
+        
+        if (!signatureName) {
+            e.preventDefault();
+            alert('Please provide your digital signature (full name).');
+            document.getElementById('signature_name').focus();
+            return false;
+        }
+        
+        if (!signatureDate) {
+            e.preventDefault();
+            alert('Please provide the signature date.');
+            document.getElementById('signature_date').focus();
+            return false;
+        }
+        
+        // Confirmation dialog
+        if (!confirm('Are you sure you want to submit this acknowledgment? Once submitted, you will not be able to edit it unless a revision is requested.')) {
+            e.preventDefault();
+            return false;
+        }
+    }
+});
+
+// File upload preview
+document.getElementById('attachments').addEventListener('change', function(e) {
+    const files = e.target.files;
+    const maxSize = 16 * 1024 * 1024; // 16MB
+    
+    for (let i = 0; i < files.length; i++) {
+        if (files[i].size > maxSize) {
+            alert(`File "${files[i].name}" is too large. Maximum file size is 16MB.`);
+            e.target.value = '';
+            return;
+        }
+    }
+});
+</script>
+{% endblock %}
