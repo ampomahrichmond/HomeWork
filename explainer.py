@@ -7,12 +7,19 @@ from docx import Document
 from docx.shared import Inches
 import matplotlib.pyplot as plt
 from PIL import Image, ImageGrab
-import win32com.client
 import logging
 from datetime import datetime
-import pythoncom
 import sys
 from pathlib import Path
+
+# Try to import optional PDF conversion library
+try:
+    from docx2pdf import convert
+    PDF_AVAILABLE = True
+    print("PDF conversion available via docx2pdf")
+except ImportError:
+    PDF_AVAILABLE = False
+    print("PDF conversion not available. Install docx2pdf if you need PDF output: pip install docx2pdf")
 
 # Set up logging
 logging.basicConfig(
@@ -318,37 +325,31 @@ class AlteryxWorkflowDocumenter:
             return False
     
     def save_documentation(self, output_filename):
-        """Save the documentation as Word and PDF files"""
+        """Save the documentation as Word document and optionally as PDF"""
         try:
             # Save as Word document
             word_filename = f"{output_filename}.docx"
             self.doc.save(word_filename)
             logging.info(f"Saved Word document: {word_filename}")
+            print(f"Word document saved: {word_filename}")
             
-            # Convert to PDF
-            try:
-                # Initialize COM for the current thread (Python 3 way)
-                pythoncom.CoInitialize()
-                word = win32com.client.Dispatch('Word.Application')
-                doc = word.Documents.Open(os.path.abspath(word_filename))
-                pdf_filename = f"{output_filename}.pdf"
-                doc.SaveAs(os.path.abspath(pdf_filename), FileFormat=17)  # 17 is the PDF format
-                doc.Close()
-                word.Quit()
-                logging.info(f"Saved PDF document: {pdf_filename}")
-            except Exception as pdf_error:
-                logging.error(f"Error converting to PDF: {str(pdf_error)}")
-                logging.info("Will continue with Word document only")
-            finally:
-                # Clean up COM resources (Python 3 way)
+            # Try to convert to PDF if library is available
+            if PDF_AVAILABLE:
                 try:
-                    pythoncom.CoUninitialize()
-                except:
-                    pass
+                    pdf_filename = f"{output_filename}.pdf"
+                    convert(word_filename, pdf_filename)
+                    logging.info(f"Saved PDF document: {pdf_filename}")
+                    print(f"PDF document saved: {pdf_filename}")
+                except Exception as pdf_error:
+                    logging.error(f"Error converting to PDF: {str(pdf_error)}")
+                    print(f"Warning: Could not create PDF. Error: {pdf_error}")
+            else:
+                print("PDF conversion skipped (docx2pdf not installed)")
             
             return word_filename
         except Exception as e:
             logging.error(f"Error saving documentation: {str(e)}")
+            print(f"Error saving documentation: {str(e)}")
             return None
 
 def main():
@@ -395,7 +396,10 @@ def main():
             
             if saved_file:
                 print(f"Documentation saved to {saved_file}")
-                print(f"PDF version also saved (if Word is installed).")
+                if PDF_AVAILABLE:
+                    print(f"PDF version also created.")
+                else:
+                    print(f"Only Word version created (install docx2pdf for PDF support).")
             else:
                 print("Error saving documentation. Check the log for details.")
         else:
