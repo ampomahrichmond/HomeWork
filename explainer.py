@@ -4,7 +4,9 @@ import xml.etree.ElementTree as ET
 import glob
 import pandas as pd
 from docx import Document
-from docx.shared import Inches
+from docx.shared import Inches, Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.style import WD_STYLE_TYPE
 import matplotlib.pyplot as plt
 from PIL import Image, ImageGrab
 import logging
@@ -29,29 +31,66 @@ logging.basicConfig(
 )
 
 class AlteryxWorkflowDocumenter:
-    """Class to document Alteryx workflows"""
+    """Class to document Alteryx workflows for audit purposes"""
     
     def __init__(self, workflow_dir="C:\\Users\\framework"):
         """Initialize the documenter with the directory containing workflow files"""
         self.workflow_dir = workflow_dir
         self.doc = Document()
         self.workflows = []
+        
+        # Enhanced component descriptions for auditors
         self.component_descriptions = {
-            "Input": "Data source input connection",
-            "Filter": "Filters data based on specified conditions",
-            "Formula": "Applies formulas to create or modify fields",
-            "Join": "Combines multiple datasets together",
-            "Union": "Combines datasets by appending rows",
-            "Output": "Exports data to specified location",
-            "Sort": "Arranges data in specified order",
-            "Summarize": "Aggregates data using grouping functions",
-            "TextInput": "Static text data input",
-            "TextToColumns": "Splits text fields into multiple columns",
-            "Select": "Selects, renames, or reorders fields",
-            "Comment": "Contains workflow documentation notes",
-            "Browse": "Displays data for review during workflow development",
-            "Sample": "Creates a sample of the data"
-            # Add more component descriptions as needed
+            "Input": {
+                "purpose": "Reads data from external sources",
+                "audit_concern": "Data source integrity, access controls, data lineage",
+                "what_it_does": "This component connects to and retrieves data from files, databases, or other data sources. It's the starting point of the data processing workflow."
+            },
+            "Output": {
+                "purpose": "Writes processed data to destination",
+                "audit_concern": "Output location security, data retention, access permissions",
+                "what_it_does": "This component saves the final processed data to a specified location such as a file, database, or report. This is where the workflow results are stored."
+            },
+            "Filter": {
+                "purpose": "Removes unwanted records based on criteria",
+                "audit_concern": "Business logic accuracy, completeness of filtering rules",
+                "what_it_does": "This component examines each data record and keeps only those that meet specific conditions. Records that don't meet the criteria are excluded from further processing."
+            },
+            "Formula": {
+                "purpose": "Creates new fields or modifies existing data using calculations",
+                "audit_concern": "Calculation accuracy, business rule implementation",
+                "what_it_does": "This component performs mathematical calculations, text manipulations, or logical operations to create new data fields or modify existing ones."
+            },
+            "Join": {
+                "purpose": "Combines data from multiple sources based on common fields",
+                "audit_concern": "Data matching accuracy, handling of unmatched records",
+                "what_it_does": "This component merges data from two or more sources by matching records that have the same values in specified fields (like matching customer IDs)."
+            },
+            "Summarize": {
+                "purpose": "Aggregates data by grouping and calculating totals, averages, counts",
+                "audit_concern": "Aggregation logic accuracy, completeness of groupings",
+                "what_it_does": "This component groups related records together and calculates summary statistics like totals, counts, averages, or other aggregate functions."
+            },
+            "Sort": {
+                "purpose": "Arranges data in a specific order",
+                "audit_concern": "Sorting consistency, impact on downstream processing",
+                "what_it_does": "This component reorders the data records based on specified fields, either in ascending or descending order."
+            },
+            "Union": {
+                "purpose": "Combines datasets by stacking records from multiple sources",
+                "audit_concern": "Data structure consistency, duplicate handling",
+                "what_it_does": "This component stacks data from multiple sources on top of each other, creating one larger dataset with all the records."
+            },
+            "Select": {
+                "purpose": "Chooses specific fields and controls data structure",
+                "audit_concern": "Data completeness, field selection rationale",
+                "what_it_does": "This component selects which data fields to keep, rename, or reorder. It's used to clean up the data structure and keep only relevant information."
+            },
+            "Browse": {
+                "purpose": "Displays data for review and quality checking",
+                "audit_concern": "Data quality validation points",
+                "what_it_does": "This component allows users to view the data at specific points in the workflow for quality checking and validation purposes."
+            }
         }
         logging.info(f"Initialized AlteryxWorkflowDocumenter with directory: {workflow_dir}")
     
@@ -103,7 +142,8 @@ class AlteryxWorkflowDocumenter:
             workflow_info = {
                 'name': workflow_name,
                 'path': workflow_path,
-                'components': []
+                'components': [],
+                'connections': []
             }
             
             # Extract components (nodes)
@@ -119,43 +159,50 @@ class AlteryxWorkflowDocumenter:
                     'description': '',
                     'inputs': [],
                     'outputs': [],
-                    'properties': {}
+                    'properties': {},
+                    'position': {'x': 0, 'y': 0}
                 }
                 
-                # Extract component label/description
+                # Extract position for workflow visualization
                 gui_settings = node.find(".//GuiSettings")
                 if gui_settings is not None:
                     component['label'] = gui_settings.get('Html', '')
+                    position = gui_settings.get('Position', '0,0').split(',')
+                    if len(position) >= 2:
+                        try:
+                            component['position']['x'] = int(position[0])
+                            component['position']['y'] = int(position[1])
+                        except:
+                            pass
                 
-                # Extract properties
+                # Extract properties with better organization
                 properties = node.findall(".//Properties/Configuration/*")
                 for prop in properties:
-                    component['properties'][prop.tag] = prop.text
+                    if prop.text:
+                        component['properties'][prop.tag] = prop.text
                 
-                # Extract connections (inputs and outputs)
+                # Extract connections
                 connections = root.findall(f".//Connection[@TargetID='{component['id']}']")
                 for conn in connections:
                     component['inputs'].append({
                         'source_id': conn.get('SourceID', ''),
-                        'source_type': '',  # To be filled later
-                        'name': conn.get('Name', '')
+                        'source_type': '',
+                        'name': conn.get('Name', ''),
+                        'wireless': conn.get('Wireless', 'False') == 'True'
                     })
                 
                 connections = root.findall(f".//Connection[@SourceID='{component['id']}']")
                 for conn in connections:
                     component['outputs'].append({
                         'target_id': conn.get('TargetID', ''),
-                        'target_type': '',  # To be filled later
-                        'name': conn.get('Name', '')
+                        'target_type': '',
+                        'name': conn.get('Name', ''),
+                        'wireless': conn.get('Wireless', 'False') == 'True'
                     })
-                
-                # Get component description
-                component_type = component['plugin'].split('.')[-1] if '.' in component['plugin'] else component['plugin']
-                component['description'] = self.component_descriptions.get(component_type, f"Component of type {component_type}")
                 
                 workflow_info['components'].append(component)
             
-            # Fill in source/target types
+            # Fill in source/target types and create flow map
             component_dict = {comp['id']: comp for comp in workflow_info['components']}
             for component in workflow_info['components']:
                 for input_conn in component['inputs']:
@@ -177,151 +224,305 @@ class AlteryxWorkflowDocumenter:
             logging.error(f"Error parsing workflow {workflow_path}: {str(e)}")
             return None
     
-    def capture_screenshot(self, region=None):
-        """Capture a screenshot of the specified region or entire screen"""
-        try:
-            # If no region is specified, capture the entire screen
-            if region is None:
-                screenshot = ImageGrab.grab()
-            else:
-                # region should be a tuple (left, top, right, bottom)
-                screenshot = ImageGrab.grab(bbox=region)
+    def analyze_workflow_flow(self, workflow_info):
+        """Analyze the workflow to understand the data flow sequence"""
+        components = workflow_info['components']
+        component_dict = {comp['id']: comp for comp in components}
+        
+        # Find input components (no inputs)
+        inputs = [comp for comp in components if not comp['inputs']]
+        
+        # Find output components (no outputs)
+        outputs = [comp for comp in components if not comp['outputs']]
+        
+        # Build flow sequence
+        flow_sequence = []
+        visited = set()
+        
+        def trace_flow(component, path=[]):
+            if component['id'] in visited:
+                return
+            visited.add(component['id'])
             
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"screenshot_{timestamp}.png"
-            screenshot.save(filename)
-            logging.info(f"Screenshot saved to {filename}")
-            return filename
-        except Exception as e:
-            logging.error(f"Error capturing screenshot: {str(e)}")
-            return None
+            current_path = path + [component]
+            
+            if not component['outputs']:  # This is an end point
+                flow_sequence.append(current_path)
+            else:
+                for output in component['outputs']:
+                    if output['target_id'] in component_dict:
+                        next_comp = component_dict[output['target_id']]
+                        trace_flow(next_comp, current_path)
+        
+        # Start tracing from input components
+        for input_comp in inputs:
+            trace_flow(input_comp)
+        
+        return {
+            'inputs': inputs,
+            'outputs': outputs,
+            'flow_sequences': flow_sequence
+        }
     
-    def generate_documentation(self, workflow_info):
-        """Generate documentation for a workflow"""
+    def generate_audit_documentation(self, workflow_info):
+        """Generate comprehensive audit documentation"""
         try:
-            # Create a new document
+            # Create a new document with better formatting
             self.doc = Document()
             
-            # Add title
-            self.doc.add_heading(f'Alteryx Workflow Documentation: {workflow_info["name"]}', 0)
+            # Set up styles
+            styles = self.doc.styles
             
-            # Add timestamp
-            self.doc.add_paragraph(f'Generated on: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
+            # Add title page
+            title = self.doc.add_heading('ALTERYX WORKFLOW AUDIT DOCUMENTATION', 0)
+            title.alignment = WD_ALIGN_PARAGRAPH.CENTER
             
-            # Add workflow overview section
-            self.doc.add_heading('Workflow Overview', level=1)
-            self.doc.add_paragraph(f'Workflow File: {workflow_info["name"]}')
-            self.doc.add_paragraph(f'File Path: {workflow_info["path"]}')
+            self.doc.add_paragraph('')
+            
+            # Add workflow identification
+            self.doc.add_paragraph(f'Workflow Name: {workflow_info["name"]}', style='Heading 2')
+            self.doc.add_paragraph(f'File Location: {workflow_info["path"]}')
+            self.doc.add_paragraph(f'Documentation Generated: {datetime.now().strftime("%B %d, %Y at %I:%M %p")}')
             self.doc.add_paragraph(f'Total Components: {len(workflow_info["components"])}')
             
-            # Add component summary table
-            self.doc.add_heading('Component Summary', level=1)
-            table = self.doc.add_table(rows=1, cols=3)
-            table.style = 'Table Grid'
-            header_cells = table.rows[0].cells
-            header_cells[0].text = 'Component Type'
-            header_cells[1].text = 'Count'
-            header_cells[2].text = 'Description'
+            # Page break
+            self.doc.add_page_break()
             
-            # Count components by type
-            component_counts = {}
+            # Executive Summary
+            self.doc.add_heading('EXECUTIVE SUMMARY', level=1)
+            
+            # Analyze workflow
+            flow_analysis = self.analyze_workflow_flow(workflow_info)
+            
+            summary_text = f"""
+This document provides a comprehensive audit trail for the Alteryx workflow '{workflow_info["name"]}'. 
+This workflow contains {len(workflow_info["components"])} components that process data through {len(flow_analysis['flow_sequences'])} main processing paths.
+
+KEY COMPONENTS:
+• {len(flow_analysis['inputs'])} Data Input Sources
+• {len(flow_analysis['outputs'])} Output Destinations  
+• {len([c for c in workflow_info["components"] if 'Filter' in c.get('plugin', '')])} Data Filters
+• {len([c for c in workflow_info["components"] if 'Formula' in c.get('plugin', '')])} Calculation/Formula Components
+• {len([c for c in workflow_info["components"] if 'Join' in c.get('plugin', '')])} Data Joins
+• {len([c for c in workflow_info["components"] if 'Summarize' in c.get('plugin', '')])} Aggregation/Summary Components
+
+This workflow is designed to process data through a series of validated steps, ensuring data quality and business rule compliance at each stage.
+            """
+            self.doc.add_paragraph(summary_text.strip())
+            
+            # Data Flow Overview
+            self.doc.add_heading('DATA FLOW OVERVIEW', level=1)
+            
+            self.doc.add_paragraph("This section describes how data moves through the workflow from start to finish:")
+            
+            for i, flow_path in enumerate(flow_analysis['flow_sequences'], 1):
+                self.doc.add_heading(f'Processing Path {i}', level=2)
+                
+                for j, component in enumerate(flow_path, 1):
+                    component_type = component['plugin'].split('.')[-1] if '.' in component['plugin'] else component['plugin']
+                    
+                    self.doc.add_paragraph(f"Step {j}: {component_type}", style='Heading 3')
+                    
+                    # Get component description
+                    comp_info = self.component_descriptions.get(component_type, {
+                        "purpose": f"Performs {component_type} operations",
+                        "what_it_does": f"This component handles {component_type} functionality in the workflow."
+                    })
+                    
+                    self.doc.add_paragraph(f"Purpose: {comp_info['purpose']}")
+                    self.doc.add_paragraph(f"What it does: {comp_info['what_it_does']}")
+                    
+                    # Add key properties if available
+                    if component['properties']:
+                        key_props = {k: v for k, v in component['properties'].items() 
+                                   if k in ['FileName', 'File', 'OutputMode', 'Expression', 'Filter']}
+                        if key_props:
+                            self.doc.add_paragraph("Key Configuration:")
+                            for prop, value in key_props.items():
+                                if len(str(value)) > 100:
+                                    value = str(value)[:100] + "..."
+                                self.doc.add_paragraph(f"• {prop}: {value}")
+                    
+                    self.doc.add_paragraph("")
+            
+            # Detailed Component Analysis
+            self.doc.add_heading('DETAILED COMPONENT ANALYSIS', level=1)
+            
+            # Group components by type for better organization
+            components_by_type = {}
             for component in workflow_info['components']:
                 component_type = component['plugin'].split('.')[-1] if '.' in component['plugin'] else component['plugin']
-                if component_type in component_counts:
-                    component_counts[component_type] += 1
-                else:
-                    component_counts[component_type] = 1
+                if component_type not in components_by_type:
+                    components_by_type[component_type] = []
+                components_by_type[component_type].append(component)
             
-            # Add component counts to table
-            for component_type, count in component_counts.items():
-                description = self.component_descriptions.get(component_type, f"Component of type {component_type}")
-                row_cells = table.add_row().cells
-                row_cells[0].text = component_type
-                row_cells[1].text = str(count)
-                row_cells[2].text = description
-            
-            # Add detailed component documentation
-            self.doc.add_heading('Detailed Component Documentation', level=1)
-            
-            for component in workflow_info['components']:
-                component_type = component['plugin'].split('.')[-1] if '.' in component['plugin'] else component['plugin']
+            for component_type, components in components_by_type.items():
+                self.doc.add_heading(f'{component_type} Components ({len(components)})', level=2)
                 
-                # Add component section
-                self.doc.add_heading(f'{component_type}: {component["label"] or component["id"]}', level=2)
-                self.doc.add_paragraph(f'Description: {component["description"]}')
+                # Add component type description
+                comp_info = self.component_descriptions.get(component_type, {})
+                if comp_info:
+                    self.doc.add_paragraph(f"Purpose: {comp_info.get('purpose', 'N/A')}")
+                    if 'audit_concern' in comp_info:
+                        self.doc.add_paragraph(f"Audit Focus: {comp_info['audit_concern']}")
+                    self.doc.add_paragraph("")
                 
-                # Add properties table if there are properties
-                if component['properties']:
-                    self.doc.add_heading('Properties', level=3)
-                    prop_table = self.doc.add_table(rows=1, cols=2)
-                    prop_table.style = 'Table Grid'
-                    header_cells = prop_table.rows[0].cells
-                    header_cells[0].text = 'Property'
+                # Document each component of this type
+                for i, component in enumerate(components, 1):
+                    self.doc.add_heading(f'{component_type} #{i}: {component.get("label", component["id"])}', level=3)
+                    
+                    # Component details
+                    details_table = self.doc.add_table(rows=1, cols=2)
+                    details_table.style = 'Table Grid'
+                    header_cells = details_table.rows[0].cells
+                    header_cells[0].text = 'Attribute'
                     header_cells[1].text = 'Value'
                     
-                    for prop_name, prop_value in component['properties'].items():
-                        if prop_value is not None:
-                            row_cells = prop_table.add_row().cells
-                            row_cells[0].text = prop_name
-                            # Truncate very long property values
-                            if prop_value and len(prop_value) > 1000:
-                                row_cells[1].text = prop_value[:1000] + "... (truncated)"
-                            else:
-                                row_cells[1].text = prop_value or ""
-                
-                # Document inputs
-                if component['inputs']:
-                    self.doc.add_heading('Inputs', level=3)
-                    input_table = self.doc.add_table(rows=1, cols=3)
-                    input_table.style = 'Table Grid'
-                    header_cells = input_table.rows[0].cells
-                    header_cells[0].text = 'Source ID'
-                    header_cells[1].text = 'Source Type'
-                    header_cells[2].text = 'Connection Name'
+                    # Add component ID
+                    row_cells = details_table.add_row().cells
+                    row_cells[0].text = 'Component ID'
+                    row_cells[1].text = component['id']
                     
-                    for input_conn in component['inputs']:
-                        row_cells = input_table.add_row().cells
-                        row_cells[0].text = input_conn['source_id']
-                        row_cells[1].text = input_conn['source_type']
-                        row_cells[2].text = input_conn['name']
-                
-                # Document outputs
-                if component['outputs']:
-                    self.doc.add_heading('Outputs', level=3)
-                    output_table = self.doc.add_table(rows=1, cols=3)
-                    output_table.style = 'Table Grid'
-                    header_cells = output_table.rows[0].cells
-                    header_cells[0].text = 'Target ID'
-                    header_cells[1].text = 'Target Type'
-                    header_cells[2].text = 'Connection Name'
+                    # Add inputs if any
+                    if component['inputs']:
+                        row_cells = details_table.add_row().cells
+                        row_cells[0].text = 'Data Sources'
+                        sources = ', '.join([f"{inp['source_type']} ({inp['source_id']})" for inp in component['inputs']])
+                        row_cells[1].text = sources
                     
-                    for output_conn in component['outputs']:
-                        row_cells = output_table.add_row().cells
-                        row_cells[0].text = output_conn['target_id']
-                        row_cells[1].text = output_conn['target_type']
-                        row_cells[2].text = output_conn['name']
-                
-                # Add screenshots for key components
-                if component_type in ['Input', 'Output', 'Formula', 'Summarize', 'Filter', 'Join']:
-                    self.doc.add_heading('Visual Reference', level=3)
-                    self.doc.add_paragraph('Note: This is a placeholder for screenshots. In a production implementation, the script would capture actual screenshots of the relevant components.')
-                    # In a production implementation, you would replace this with actual component screenshots
-                
-                self.doc.add_paragraph('') # Add spacing between components
+                    # Add outputs if any
+                    if component['outputs']:
+                        row_cells = details_table.add_row().cells
+                        row_cells[0].text = 'Data Destinations'
+                        destinations = ', '.join([f"{out['target_type']} ({out['target_id']})" for out in component['outputs']])
+                        row_cells[1].text = destinations
+                    
+                    # Add key properties
+                    important_props = ['FileName', 'File', 'OutputMode', 'Expression', 'Filter', 'Mode']
+                    for prop in important_props:
+                        if prop in component['properties'] and component['properties'][prop]:
+                            row_cells = details_table.add_row().cells
+                            row_cells[0].text = prop
+                            prop_value = str(component['properties'][prop])
+                            if len(prop_value) > 200:
+                                prop_value = prop_value[:200] + "... (truncated)"
+                            row_cells[1].text = prop_value
+                    
+                    self.doc.add_paragraph("")
             
-            # Add data flow diagram section
-            self.doc.add_heading('Data Flow Diagram', level=1)
-            self.doc.add_paragraph('Note: This section would include a visual representation of the workflow data flow.')
+            # Quality Control and Validation Points
+            self.doc.add_heading('QUALITY CONTROL & VALIDATION POINTS', level=1)
             
-            # Add access control section
-            self.doc.add_heading('Access Control', level=1)
-            self.doc.add_paragraph('The following users and groups have access to this workflow and its outputs:')
-            self.doc.add_paragraph('Note: This information would be populated based on system access control settings.')
+            validation_text = """
+The following components serve as quality control and validation points in the workflow:
+
+BROWSE COMPONENTS: These components allow for data inspection at key points in the workflow. 
+During execution, users can review data quality, record counts, and field values to ensure 
+processing is occurring correctly.
+
+FILTER COMPONENTS: These components implement business rules and data quality checks by 
+removing invalid or unwanted records. The filter conditions should be reviewed to ensure 
+they align with business requirements.
+
+OUTPUT COMPONENTS: These components represent the final deliverables of the workflow. 
+The output locations and formats should be verified for security and access control compliance.
+            """
+            self.doc.add_paragraph(validation_text.strip())
             
-            logging.info(f"Successfully generated documentation for workflow: {workflow_info['name']}")
+            # Browse components
+            browse_components = [c for c in workflow_info['components'] if 'Browse' in c.get('plugin', '')]
+            if browse_components:
+                self.doc.add_heading('Data Review Points', level=2)
+                for browse in browse_components:
+                    self.doc.add_paragraph(f"• Review Point {browse['id']}: Allows inspection of data after processing steps")
+            
+            # Filter components
+            filter_components = [c for c in workflow_info['components'] if 'Filter' in c.get('plugin', '')]
+            if filter_components:
+                self.doc.add_heading('Data Quality Filters', level=2)
+                for filt in filter_components:
+                    filter_expr = filt['properties'].get('Filter', 'Not specified')
+                    self.doc.add_paragraph(f"• Filter {filt['id']}: {filter_expr}")
+            
+            # Testing and Replication Instructions
+            self.doc.add_heading('TESTING AND REPLICATION INSTRUCTIONS', level=1)
+            
+            testing_instructions = f"""
+To test or replicate this workflow:
+
+1. ENVIRONMENT SETUP:
+   • Ensure Alteryx Designer is installed and licensed
+   • Verify access to all input data sources identified in the Input components
+   • Confirm write permissions to all output destinations
+
+2. DATA PREPARATION:
+   • Prepare test data that matches the structure of the original input sources
+   • Ensure test data includes edge cases and boundary conditions
+   • Document any data dependencies or prerequisites
+
+3. EXECUTION STEPS:
+   • Open the workflow file: {workflow_info['name']}
+   • Review all Input components to ensure data source connections are valid
+   • Run the workflow in segments using Browse components to validate intermediate results
+   • Compare output results with expected outcomes
+   • Document any discrepancies or errors
+
+4. VALIDATION CHECKLIST:
+   • Verify record counts at each major processing step
+   • Check calculation accuracy in Formula components  
+   • Validate filter logic removes appropriate records
+   • Confirm output format and location match requirements
+   • Test with various data scenarios (normal, edge cases, empty datasets)
+            """
+            self.doc.add_paragraph(testing_instructions.strip())
+            
+            # Access Control and Security
+            self.doc.add_heading('ACCESS CONTROL AND SECURITY', level=1)
+            
+            security_text = """
+WORKFLOW FILE ACCESS:
+The workflow file itself should be stored in a secure location with appropriate access controls. 
+Only authorized personnel should have the ability to modify the workflow logic.
+
+DATA SOURCE SECURITY:
+Review the security settings and access controls for all input data sources. Ensure that 
+data access follows the principle of least privilege.
+
+OUTPUT DESTINATION SECURITY:  
+Verify that output files and databases have appropriate security settings. Consider data 
+sensitivity and implement encryption where required.
+
+AUDIT TRAIL:
+Maintain logs of workflow execution, including who ran the workflow, when it was executed, 
+and any errors or warnings that occurred during processing.
+            """
+            self.doc.add_paragraph(security_text.strip())
+            
+            # Input and Output Summary
+            self.doc.add_heading('INPUT AND OUTPUT SUMMARY', level=1)
+            
+            # Input sources
+            input_components = [c for c in workflow_info['components'] if 'Input' in c.get('plugin', '')]
+            if input_components:
+                self.doc.add_heading('Data Input Sources', level=2)
+                for inp in input_components:
+                    file_path = inp['properties'].get('FileName', inp['properties'].get('File', 'Not specified'))
+                    self.doc.add_paragraph(f"• Input {inp['id']}: {file_path}")
+            
+            # Output destinations  
+            output_components = [c for c in workflow_info['components'] if 'Output' in c.get('plugin', '')]
+            if output_components:
+                self.doc.add_heading('Data Output Destinations', level=2)
+                for out in output_components:
+                    file_path = out['properties'].get('FileName', out['properties'].get('File', 'Not specified'))
+                    self.doc.add_paragraph(f"• Output {out['id']}: {file_path}")
+            
+            logging.info(f"Successfully generated audit documentation for workflow: {workflow_info['name']}")
             return True
+            
         except Exception as e:
             logging.error(f"Error generating documentation: {str(e)}")
+            print(f"Error generating documentation: {str(e)}")
             return False
     
     def save_documentation(self, output_filename):
@@ -354,8 +555,8 @@ class AlteryxWorkflowDocumenter:
 
 def main():
     """Main function to run the workflow documentation process"""
-    print("Alteryx Workflow Documentation Generator")
-    print("=======================================")
+    print("Alteryx Workflow Audit Documentation Generator")
+    print("==============================================")
     
     # Get the current working directory and check for workflows there too
     current_dir = os.getcwd()
@@ -387,15 +588,15 @@ def main():
             print(f"Error parsing workflow. Check the log for details.")
             continue
         
-        # Generate documentation
-        if documenter.generate_documentation(workflow_info):
+        # Generate audit documentation
+        if documenter.generate_audit_documentation(workflow_info):
             # Save documentation
             output_base = os.path.splitext(os.path.basename(workflow_path))[0]
-            output_filename = f"{output_base}_documentation"
+            output_filename = f"{output_base}_audit_documentation"
             saved_file = documenter.save_documentation(output_filename)
             
             if saved_file:
-                print(f"Documentation saved to {saved_file}")
+                print(f"Audit documentation saved to {saved_file}")
                 if PDF_AVAILABLE:
                     print(f"PDF version also created.")
                 else:
@@ -405,7 +606,7 @@ def main():
         else:
             print("Error generating documentation. Check the log for details.")
     
-    print("\nDocumentation process complete.")
+    print("\nAudit documentation process complete.")
 
 if __name__ == "__main__":
     main()
