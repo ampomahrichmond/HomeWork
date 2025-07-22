@@ -1,1 +1,17 @@
 1- Notes from Collibra
+
+
+To accelerate our transition to Collibra and meet EDMO compliance deadlines, our team developed an MVP tool that automatically converts raw SQL into Collibra-compatible rule syntax. This tool addresses the growing challenge of migrating 8,000+ data quality rules by replacing slow, manual conversion processes with a scalable, automated solution.
+
+Key Benefits:
+
+Speeds up rule migration by 70–80%
+
+Reduces errors and ensures consistency across business rules
+
+Generates Collibra-ready output (e.g., JSON format)
+
+Lays the foundation for scalable integration with metadata tagging, API automation, and user-friendly UI
+
+This MVP directly supports our strategic goals in data governance, enhances productivity, and reduces operational risk. We are seeking leadership support to evolve the tool for enterprise-wide deployment.
+
