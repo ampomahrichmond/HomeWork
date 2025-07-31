@@ -12,7 +12,7 @@ from sqlparse.tokens import Keyword, Operator
 class SQLFilterExtractor:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("SQL Filter Extractor - Auditor Tool")
+        self.root.title("SQL Filter Extractor - Focused Analysis")
         self.root.geometry("1000x700")
         self.root.configure(bg='#f0f0f0')
         
@@ -34,7 +34,7 @@ class SQLFilterExtractor:
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
         # Title
-        title_label = ttk.Label(main_frame, text="SQL Filter Extractor", style='Title.TLabel')
+        title_label = ttk.Label(main_frame, text="SQL Filter Extractor - WHERE Clause Focus", style='Title.TLabel')
         title_label.grid(row=0, column=0, columnspan=3, pady=(0, 20))
         
         # File selection section
@@ -56,42 +56,42 @@ class SQLFilterExtractor:
         self.file_listbox.configure(yscrollcommand=scrollbar.set)
         
         # Filter options section
-        options_frame = ttk.LabelFrame(main_frame, text="Filter Options", padding="15")
+        options_frame = ttk.LabelFrame(main_frame, text="Analysis Focus", padding="15")
         options_frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 15))
         
-        self.extract_where = tk.BooleanVar(value=True)
-        self.extract_joins = tk.BooleanVar(value=True)
+        ttk.Label(options_frame, text="✓ Focus on WHERE clause filters only (excludes JOIN conditions)", 
+                 font=('Arial', 10)).grid(row=0, column=0, sticky=tk.W)
+        ttk.Label(options_frame, text="✓ Extract meaningful data filters (= inequalities, IN, LIKE, etc.)", 
+                 font=('Arial', 10)).grid(row=1, column=0, sticky=tk.W, pady=(5, 0))
+        ttk.Label(options_frame, text="✗ Ignore JOIN conditions and table relationships", 
+                 font=('Arial', 10), foreground='gray').grid(row=2, column=0, sticky=tk.W, pady=(5, 0))
+        
         self.case_sensitive = tk.BooleanVar(value=False)
-        
-        ttk.Checkbutton(options_frame, text="Extract WHERE clause filters", 
-                       variable=self.extract_where).grid(row=0, column=0, sticky=tk.W)
-        ttk.Checkbutton(options_frame, text="Extract JOIN conditions", 
-                       variable=self.extract_joins).grid(row=0, column=1, sticky=tk.W, padx=(20, 0))
         ttk.Checkbutton(options_frame, text="Case sensitive matching", 
-                       variable=self.case_sensitive).grid(row=1, column=0, sticky=tk.W, pady=(10, 0))
+                       variable=self.case_sensitive).grid(row=3, column=0, sticky=tk.W, pady=(15, 0))
         
-        # Pattern matching section
-        pattern_frame = ttk.LabelFrame(main_frame, text="Pattern Matching", padding="15")
+        # Pattern matching section (optional)
+        pattern_frame = ttk.LabelFrame(main_frame, text="Optional: Filter Specific Patterns", padding="15")
         pattern_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 15))
         
-        ttk.Label(pattern_frame, text="Look for patterns like 'AND XYZ = \"ABC\"':").grid(row=0, column=0, sticky=tk.W)
+        ttk.Label(pattern_frame, text="Leave blank to get ALL WHERE filters, or specify patterns to match:").grid(row=0, column=0, sticky=tk.W, columnspan=2)
         
         pattern_subframe = ttk.Frame(pattern_frame)
         pattern_subframe.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(10, 0))
         
-        ttk.Label(pattern_subframe, text="Variable name:").grid(row=0, column=0, sticky=tk.W)
-        self.var_pattern = tk.StringVar(value=".*")  # Default to match any variable
-        ttk.Entry(pattern_subframe, textvariable=self.var_pattern, width=15).grid(row=0, column=1, padx=(5, 15))
+        ttk.Label(pattern_subframe, text="Column/Field contains:").grid(row=0, column=0, sticky=tk.W)
+        self.var_pattern = tk.StringVar(value="")  # Empty = match all
+        ttk.Entry(pattern_subframe, textvariable=self.var_pattern, width=20).grid(row=0, column=1, padx=(5, 15))
         
-        ttk.Label(pattern_subframe, text="Value:").grid(row=0, column=2, sticky=tk.W)
-        self.value_pattern = tk.StringVar(value=".*")  # Default to match any value
-        ttk.Entry(pattern_subframe, textvariable=self.value_pattern, width=15).grid(row=0, column=3, padx=(5, 0))
+        ttk.Label(pattern_subframe, text="Value contains:").grid(row=0, column=2, sticky=tk.W)
+        self.value_pattern = tk.StringVar(value="")  # Empty = match all
+        ttk.Entry(pattern_subframe, textvariable=self.value_pattern, width=20).grid(row=0, column=3, padx=(5, 0))
         
         # Action buttons
         button_frame = ttk.Frame(main_frame)
         button_frame.grid(row=4, column=0, columnspan=3, pady=(0, 15))
         
-        ttk.Button(button_frame, text="🔍 Analyze Files", 
+        ttk.Button(button_frame, text="🔍 Extract WHERE Filters", 
                   command=self.analyze_files, style='Custom.TButton').grid(row=0, column=0, padx=(0, 10))
         ttk.Button(button_frame, text="💾 Export Results", 
                   command=self.export_results, style='Custom.TButton').grid(row=0, column=1, padx=(0, 10))
@@ -103,16 +103,28 @@ class SQLFilterExtractor:
         self.progress.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 15))
         
         # Results section
-        results_frame = ttk.LabelFrame(main_frame, text="Analysis Results", padding="15")
+        results_frame = ttk.LabelFrame(main_frame, text="WHERE Clause Filters Found", padding="15")
         results_frame.grid(row=6, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 0))
         
-        # Results treeview
-        columns = ('File', 'Type', 'Table/Alias', 'Column', 'Operator', 'Value', 'Full Condition')
+        # Results treeview - simplified columns
+        columns = ('File', 'Column/Field', 'Operator', 'Value', 'Filter Condition')
         self.results_tree = ttk.Treeview(results_frame, columns=columns, show='headings', height=12)
         
-        for col in columns:
-            self.results_tree.heading(col, text=col)
-            self.results_tree.column(col, width=120, minwidth=80)
+        # Adjust column widths
+        self.results_tree.heading('File', text='File')
+        self.results_tree.column('File', width=150, minwidth=100)
+        
+        self.results_tree.heading('Column/Field', text='Column/Field')
+        self.results_tree.column('Column/Field', width=200, minwidth=150)
+        
+        self.results_tree.heading('Operator', text='Operator')
+        self.results_tree.column('Operator', width=80, minwidth=60)
+        
+        self.results_tree.heading('Value', text='Value')
+        self.results_tree.column('Value', width=150, minwidth=100)
+        
+        self.results_tree.heading('Filter Condition', text='Complete Filter')
+        self.results_tree.column('Filter Condition', width=300, minwidth=200)
         
         self.results_tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
@@ -150,152 +162,168 @@ class SQLFilterExtractor:
             
             self.file_count_label.config(text=f"{len(self.selected_files)} files selected")
     
-    def extract_filters_from_sql(self, sql_content, filename):
-        """Extract filters from SQL content using sqlparse"""
+    def extract_where_filters_only(self, sql_content, filename):
+        """Extract ONLY WHERE clause filters - ignore JOINs"""
         filters = []
         
-        try:
-            # Parse the SQL
-            parsed = sqlparse.parse(sql_content)
-            
-            for statement in parsed:
-                self.extract_from_statement(statement, filename, filters)
+        # Clean up the SQL
+        sql_content = re.sub(r'--.*?\n', '\n', sql_content)  # Remove line comments
+        sql_content = re.sub(r'/\*.*?\*/', '', sql_content, flags=re.DOTALL)  # Remove block comments
+        sql_content = re.sub(r'\s+', ' ', sql_content)  # Normalize whitespace
         
-        except Exception as e:
-            print(f"Error parsing SQL in {filename}: {str(e)}")
-            # Fallback to regex-based extraction
-            self.extract_with_regex(sql_content, filename, filters)
+        # Find WHERE clauses specifically
+        # Look for WHERE keyword followed by conditions until we hit ORDER BY, GROUP BY, etc.
+        where_pattern = r'\bWHERE\s+(.*?)(?=\s+(?:ORDER\s+BY|GROUP\s+BY|HAVING|LIMIT|UNION|$))'
+        where_matches = re.finditer(where_pattern, sql_content, re.IGNORECASE | re.DOTALL)
+        
+        for match in where_matches:
+            where_clause = match.group(1).strip()
+            self.parse_where_conditions(where_clause, filename, filters)
         
         return filters
     
-    def extract_from_statement(self, statement, filename, filters):
-        """Recursively extract filters from SQL statement tokens"""
-        for token in statement.flatten():
-            if token.ttype is Keyword and token.value.upper() in ('WHERE', 'JOIN', 'ON'):
-                # Look ahead for conditions
-                self.extract_conditions_after_keyword(statement, token, filename, filters)
+    def parse_where_conditions(self, where_clause, filename, filters):
+        """Parse individual WHERE conditions, focusing on data filters"""
+        
+        # Split by AND/OR while preserving the structure
+        # Use regex to split but keep the logical operators
+        conditions = re.split(r'\s+(AND|OR)\s+', where_clause, flags=re.IGNORECASE)
+        
+        for condition in conditions:
+            condition = condition.strip()
+            
+            # Skip logical operators
+            if condition.upper() in ('AND', 'OR'):
+                continue
+                
+            # Skip if it's empty or too short
+            if len(condition) < 3:
+                continue
+            
+            # Look for actual filter conditions (not join conditions)
+            if self.is_data_filter(condition):
+                filter_info = self.extract_filter_info(condition, filename)
+                if filter_info and self.matches_user_pattern(filter_info):
+                    filters.append(filter_info)
     
-    def extract_conditions_after_keyword(self, statement, keyword_token, filename, filters):
-        """Extract conditions that come after WHERE, JOIN, or ON keywords"""
-        tokens = list(statement.flatten())
-        keyword_index = tokens.index(keyword_token)
+    def is_data_filter(self, condition):
+        """Determine if this is a data filter vs a join condition"""
         
-        condition_text = ""
-        for i in range(keyword_index + 1, len(tokens)):
-            token = tokens[i]
-            if token.ttype is Keyword and token.value.upper() in ('ORDER', 'GROUP', 'HAVING', 'SELECT', 'FROM'):
-                break
-            condition_text += str(token.value)
+        # Skip conditions that are clearly join conditions
+        # Join conditions typically have table.field = table.field pattern
+        table_to_table_pattern = r'\w+\.\w+\s*=\s*\w+\.\w+$'
+        if re.match(table_to_table_pattern, condition.strip()):
+            return False
         
-        # Parse individual conditions
-        self.parse_conditions(condition_text, filename, filters, keyword_token.value.upper())
+        # Skip date comparisons between fields (often used in joins)
+        date_field_comparison = r'\w+\.DL_AS_OF_DT\s*=\s*\w+\.DL_AS_OF_DT$'
+        if re.match(date_field_comparison, condition.strip(), re.IGNORECASE):
+            return False
+        
+        # Look for operators that indicate data filtering
+        filter_operators = ['=', '!=', '<>', '>', '<', '>=', '<=', 'LIKE', 'IN', 'NOT IN', 'IS NULL', 'IS NOT NULL', 'BETWEEN']
+        
+        for op in filter_operators:
+            if op in condition.upper():
+                return True
+        
+        return False
     
-    def parse_conditions(self, condition_text, filename, filters, clause_type):
-        """Parse individual conditions from condition text"""
-        # Split by AND/OR but keep the operators
-        parts = re.split(r'\b(AND|OR)\b', condition_text, flags=re.IGNORECASE)
+    def extract_filter_info(self, condition, filename):
+        """Extract structured information from a filter condition"""
         
-        current_condition = ""
-        for part in parts:
-            part = part.strip()
-            if part.upper() in ('AND', 'OR'):
-                if current_condition:
-                    self.analyze_condition(current_condition, filename, filters, clause_type)
-                current_condition = ""
-            else:
-                current_condition = part
-        
-        if current_condition:
-            self.analyze_condition(current_condition, filename, filters, clause_type)
-    
-    def analyze_condition(self, condition, filename, filters, clause_type):
-        """Analyze a single condition"""
-        # Look for equality conditions
-        operators = ['=', '!=', '<>', '>', '<', '>=', '<=', 'LIKE', 'IN', 'NOT IN']
+        # Define operators in order of complexity (check complex ones first)
+        operators = ['IS NOT NULL', 'IS NULL', 'NOT IN', '!=', '<>', '>=', '<=', 'LIKE', 'IN', 'BETWEEN', '=', '>', '<']
         
         for op in operators:
-            if op in condition:
-                parts = condition.split(op, 1)
-                if len(parts) == 2:
+            # Case insensitive search for operator
+            if re.search(r'\b' + re.escape(op) + r'\b', condition, re.IGNORECASE):
+                parts = re.split(r'\b' + re.escape(op) + r'\b', condition, 1, re.IGNORECASE)
+                
+                if len(parts) >= 2:
                     left_side = parts[0].strip()
-                    right_side = parts[1].strip()
+                    right_side = parts[1].strip() if len(parts) > 1 else ""
                     
-                    # Extract table/column information
-                    table_col = self.extract_table_column(left_side)
-                    value = self.clean_value(right_side)
+                    # Clean up the field name
+                    field = self.clean_field_name(left_side)
                     
-                    # Check if it matches the pattern
-                    if self.matches_pattern(left_side, right_side):
-                        filters.append({
-                            'filename': filename,
-                            'clause_type': clause_type,
-                            'table_alias': table_col.get('table', ''),
-                            'column': table_col.get('column', left_side),
-                            'operator': op,
-                            'value': value,
-                            'full_condition': condition.strip()
-                        })
-                break
+                    # Clean up the value
+                    value = self.clean_value(right_side) if right_side else "NULL"
+                    
+                    return {
+                        'filename': filename,
+                        'column': field,
+                        'operator': op,
+                        'value': value,
+                        'full_condition': condition.strip()
+                    }
+        
+        return None
     
-    def extract_table_column(self, field):
-        """Extract table and column from field reference"""
+    def clean_field_name(self, field):
+        """Clean and extract the main field name"""
         field = field.strip()
+        
+        # Remove function calls like NVL(), UPPER(), etc.
+        field = re.sub(r'^[A-Z_]+\s*\(\s*(.+?)\s*(?:,.*?)?\)$', r'\1', field, flags=re.IGNORECASE)
+        
+        # If it has table.column format, just return the column part for readability
+        # unless it's important to keep the table name
         if '.' in field:
             parts = field.split('.')
-            return {'table': parts[0].strip(), 'column': parts[1].strip()}
-        return {'table': '', 'column': field}
+            table = parts[0].strip()
+            column = parts[1].strip()
+            return f"{table}.{column}"  # Keep both for clarity
+        
+        return field
     
     def clean_value(self, value):
         """Clean and format the value"""
+        if not value:
+            return ""
+            
         value = value.strip()
-        # Remove quotes
+        
+        # Remove outer parentheses if they wrap the entire value
+        if value.startswith('(') and value.endswith(')'):
+            # Check if it's a list like ('1','2','3') vs a single value like ('Open')
+            inner = value[1:-1].strip()
+            if ',' in inner:
+                # It's a list, keep the parentheses
+                return value
+            else:
+                # Single value in parentheses, remove them
+                value = inner
+        
+        # Remove quotes around simple values
         if (value.startswith('"') and value.endswith('"')) or \
            (value.startswith("'") and value.endswith("'")):
-            value = value[1:-1]
+            return value[1:-1]
+        
         return value
     
-    def matches_pattern(self, left_side, right_side):
-        """Check if the condition matches the specified patterns"""
-        var_pattern = self.var_pattern.get()
-        value_pattern = self.value_pattern.get()
+    def matches_user_pattern(self, filter_info):
+        """Check if the filter matches user-specified patterns"""
+        var_pattern = self.var_pattern.get().strip()
+        value_pattern = self.value_pattern.get().strip()
+        
+        # If no patterns specified, match everything
+        if not var_pattern and not value_pattern:
+            return True
         
         flags = 0 if self.case_sensitive.get() else re.IGNORECASE
         
         # Check variable pattern
-        if var_pattern != ".*":
-            if not re.search(var_pattern, left_side, flags):
+        if var_pattern:
+            if not re.search(var_pattern, filter_info['column'], flags):
                 return False
         
         # Check value pattern
-        if value_pattern != ".*":
-            cleaned_value = self.clean_value(right_side)
-            if not re.search(value_pattern, cleaned_value, flags):
+        if value_pattern:
+            if not re.search(value_pattern, filter_info['value'], flags):
                 return False
         
         return True
-    
-    def extract_with_regex(self, sql_content, filename, filters):
-        """Fallback regex-based extraction"""
-        # Remove comments and normalize whitespace
-        sql_content = re.sub(r'--.*?\n', '\n', sql_content)
-        sql_content = re.sub(r'/\*.*?\*/', '', sql_content, flags=re.DOTALL)
-        sql_content = re.sub(r'\s+', ' ', sql_content)
-        
-        # Pattern for WHERE conditions
-        if self.extract_where.get():
-            where_pattern = r'WHERE\s+(.+?)(?=\s+(?:ORDER\s+BY|GROUP\s+BY|HAVING|LIMIT|$))'
-            where_matches = re.finditer(where_pattern, sql_content, re.IGNORECASE | re.DOTALL)
-            
-            for match in where_matches:
-                self.parse_conditions(match.group(1), filename, filters, 'WHERE')
-        
-        # Pattern for JOIN conditions
-        if self.extract_joins.get():
-            join_pattern = r'(?:INNER\s+|LEFT\s+|RIGHT\s+|FULL\s+)?JOIN\s+\w+(?:\s+\w+)?\s+ON\s+(.+?)(?=\s+(?:INNER\s+JOIN|LEFT\s+JOIN|RIGHT\s+JOIN|FULL\s+JOIN|JOIN|WHERE|ORDER\s+BY|GROUP\s+BY|$))'
-            join_matches = re.finditer(join_pattern, sql_content, re.IGNORECASE | re.DOTALL)
-            
-            for match in join_matches:
-                self.parse_conditions(match.group(1), filename, filters, 'JOIN')
     
     def analyze_files(self):
         if not self.selected_files:
@@ -316,25 +344,23 @@ class SQLFilterExtractor:
                         sql_content = f.read()
                     
                     filename = os.path.basename(file_path)
-                    filters = self.extract_filters_from_sql(sql_content, filename)
+                    filters = self.extract_where_filters_only(sql_content, filename)
                     self.results.extend(filters)
                     
                 except Exception as e:
                     print(f"Error reading file {file_path}: {str(e)}")
             
-            # Display results
+            # Display results in simplified format
             for result in self.results:
                 self.results_tree.insert('', 'end', values=(
                     result['filename'],
-                    result['clause_type'],
-                    result['table_alias'],
                     result['column'],
                     result['operator'],
                     result['value'],
                     result['full_condition']
                 ))
             
-            messagebox.showinfo("Success", f"Analysis complete! Found {len(self.results)} filters.")
+            messagebox.showinfo("Success", f"Analysis complete! Found {len(self.results)} WHERE clause filters.")
         
         except Exception as e:
             messagebox.showerror("Error", f"An error occurred during analysis: {str(e)}")
@@ -348,24 +374,34 @@ class SQLFilterExtractor:
             return
         
         # Prepare data for export
-        df = pd.DataFrame(self.results)
+        export_data = []
+        for result in self.results:
+            export_data.append({
+                'File_Name': result['filename'],
+                'Column_Field': result['column'],
+                'Operator': result['operator'],
+                'Filter_Value': result['value'],
+                'Complete_Filter_Condition': result['full_condition']
+            })
+        
+        df = pd.DataFrame(export_data)
         
         # Generate timestamp for filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        base_filename = f"sql_filters_analysis_{timestamp}"
+        base_filename = f"sql_where_filters_{timestamp}"
         
         try:
             # Export to Excel
             excel_filename = f"{base_filename}.xlsx"
-            df.to_excel(excel_filename, index=False, sheet_name='SQL Filters')
+            df.to_excel(excel_filename, index=False, sheet_name='WHERE Filters')
             
             # Export to JSON
             json_filename = f"{base_filename}.json"
             with open(json_filename, 'w', encoding='utf-8') as f:
-                json.dump(self.results, f, indent=2, ensure_ascii=False)
+                json.dump(export_data, f, indent=2, ensure_ascii=False)
             
             messagebox.showinfo("Export Complete", 
-                              f"Results exported to:\n• {excel_filename}\n• {json_filename}")
+                              f"WHERE clause filters exported to:\n• {excel_filename}\n• {json_filename}")
         
         except Exception as e:
             messagebox.showerror("Export Error", f"Failed to export results: {str(e)}")
@@ -386,7 +422,7 @@ class SQLFilterExtractor:
 
 if __name__ == "__main__":
     # Required packages check
-    required_packages = ['pandas', 'sqlparse', 'openpyxl']
+    required_packages = ['pandas', 'openpyxl']
     missing_packages = []
     
     for package in required_packages:
