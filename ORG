@@ -1,1 +1,403 @@
+import tkinter as tk
+from tkinter import ttk, filedialog, messagebox
+import pandas as pd
+import json
+import re
+import os
+from datetime import datetime
+import sqlparse
+from sqlparse.sql import Where, Comparison, Identifier, Token
+from sqlparse.tokens import Keyword, Operator
 
+class SQLFilterExtractor:
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.title("SQL Filter Extractor - Auditor Tool")
+        self.root.geometry("1000x700")
+        self.root.configure(bg='#f0f0f0')
+        
+        # Style configuration
+        self.style = ttk.Style()
+        self.style.theme_use('clam')
+        self.style.configure('Title.TLabel', font=('Arial', 16, 'bold'), background='#f0f0f0')
+        self.style.configure('Header.TLabel', font=('Arial', 12, 'bold'), background='#f0f0f0')
+        self.style.configure('Custom.TButton', padding=10)
+        
+        self.selected_files = []
+        self.results = []
+        
+        self.setup_ui()
+    
+    def setup_ui(self):
+        # Main container
+        main_frame = ttk.Frame(self.root, padding="20")
+        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        # Title
+        title_label = ttk.Label(main_frame, text="SQL Filter Extractor", style='Title.TLabel')
+        title_label.grid(row=0, column=0, columnspan=3, pady=(0, 20))
+        
+        # File selection section
+        file_frame = ttk.LabelFrame(main_frame, text="File Selection", padding="15")
+        file_frame.grid(row=1, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 15))
+        
+        ttk.Button(file_frame, text="📁 Select SQL Files", 
+                  command=self.select_files, style='Custom.TButton').grid(row=0, column=0, padx=(0, 10))
+        
+        self.file_count_label = ttk.Label(file_frame, text="No files selected")
+        self.file_count_label.grid(row=0, column=1)
+        
+        # File list
+        self.file_listbox = tk.Listbox(file_frame, height=6, width=80)
+        self.file_listbox.grid(row=1, column=0, columnspan=2, pady=(10, 0), sticky=(tk.W, tk.E))
+        
+        scrollbar = ttk.Scrollbar(file_frame, orient="vertical", command=self.file_listbox.yview)
+        scrollbar.grid(row=1, column=2, sticky=(tk.N, tk.S), pady=(10, 0))
+        self.file_listbox.configure(yscrollcommand=scrollbar.set)
+        
+        # Filter options section
+        options_frame = ttk.LabelFrame(main_frame, text="Filter Options", padding="15")
+        options_frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 15))
+        
+        self.extract_where = tk.BooleanVar(value=True)
+        self.extract_joins = tk.BooleanVar(value=True)
+        self.case_sensitive = tk.BooleanVar(value=False)
+        
+        ttk.Checkbutton(options_frame, text="Extract WHERE clause filters", 
+                       variable=self.extract_where).grid(row=0, column=0, sticky=tk.W)
+        ttk.Checkbutton(options_frame, text="Extract JOIN conditions", 
+                       variable=self.extract_joins).grid(row=0, column=1, sticky=tk.W, padx=(20, 0))
+        ttk.Checkbutton(options_frame, text="Case sensitive matching", 
+                       variable=self.case_sensitive).grid(row=1, column=0, sticky=tk.W, pady=(10, 0))
+        
+        # Pattern matching section
+        pattern_frame = ttk.LabelFrame(main_frame, text="Pattern Matching", padding="15")
+        pattern_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 15))
+        
+        ttk.Label(pattern_frame, text="Look for patterns like 'AND XYZ = \"ABC\"':").grid(row=0, column=0, sticky=tk.W)
+        
+        pattern_subframe = ttk.Frame(pattern_frame)
+        pattern_subframe.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(10, 0))
+        
+        ttk.Label(pattern_subframe, text="Variable name:").grid(row=0, column=0, sticky=tk.W)
+        self.var_pattern = tk.StringVar(value=".*")  # Default to match any variable
+        ttk.Entry(pattern_subframe, textvariable=self.var_pattern, width=15).grid(row=0, column=1, padx=(5, 15))
+        
+        ttk.Label(pattern_subframe, text="Value:").grid(row=0, column=2, sticky=tk.W)
+        self.value_pattern = tk.StringVar(value=".*")  # Default to match any value
+        ttk.Entry(pattern_subframe, textvariable=self.value_pattern, width=15).grid(row=0, column=3, padx=(5, 0))
+        
+        # Action buttons
+        button_frame = ttk.Frame(main_frame)
+        button_frame.grid(row=4, column=0, columnspan=3, pady=(0, 15))
+        
+        ttk.Button(button_frame, text="🔍 Analyze Files", 
+                  command=self.analyze_files, style='Custom.TButton').grid(row=0, column=0, padx=(0, 10))
+        ttk.Button(button_frame, text="💾 Export Results", 
+                  command=self.export_results, style='Custom.TButton').grid(row=0, column=1, padx=(0, 10))
+        ttk.Button(button_frame, text="🗑️ Clear All", 
+                  command=self.clear_all, style='Custom.TButton').grid(row=0, column=2)
+        
+        # Progress bar
+        self.progress = ttk.Progressbar(main_frame, mode='indeterminate')
+        self.progress.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 15))
+        
+        # Results section
+        results_frame = ttk.LabelFrame(main_frame, text="Analysis Results", padding="15")
+        results_frame.grid(row=6, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 0))
+        
+        # Results treeview
+        columns = ('File', 'Type', 'Table/Alias', 'Column', 'Operator', 'Value', 'Full Condition')
+        self.results_tree = ttk.Treeview(results_frame, columns=columns, show='headings', height=12)
+        
+        for col in columns:
+            self.results_tree.heading(col, text=col)
+            self.results_tree.column(col, width=120, minwidth=80)
+        
+        self.results_tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        # Results scrollbars
+        v_scrollbar = ttk.Scrollbar(results_frame, orient="vertical", command=self.results_tree.yview)
+        v_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        self.results_tree.configure(yscrollcommand=v_scrollbar.set)
+        
+        h_scrollbar = ttk.Scrollbar(results_frame, orient="horizontal", command=self.results_tree.xview)
+        h_scrollbar.grid(row=1, column=0, sticky=(tk.W, tk.E))
+        self.results_tree.configure(xscrollcommand=h_scrollbar.set)
+        
+        # Configure grid weights
+        self.root.columnconfigure(0, weight=1)
+        self.root.rowconfigure(0, weight=1)
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.rowconfigure(6, weight=1)
+        file_frame.columnconfigure(0, weight=1)
+        pattern_subframe.columnconfigure(1, weight=1)
+        pattern_subframe.columnconfigure(3, weight=1)
+        results_frame.columnconfigure(0, weight=1)
+        results_frame.rowconfigure(0, weight=1)
+    
+    def select_files(self):
+        files = filedialog.askopenfilenames(
+            title="Select SQL Files",
+            filetypes=[("SQL files", "*.sql"), ("Text files", "*.txt"), ("All files", "*.*")]
+        )
+        
+        if files:
+            self.selected_files = list(files)
+            self.file_listbox.delete(0, tk.END)
+            for file in self.selected_files:
+                self.file_listbox.insert(tk.END, os.path.basename(file))
+            
+            self.file_count_label.config(text=f"{len(self.selected_files)} files selected")
+    
+    def extract_filters_from_sql(self, sql_content, filename):
+        """Extract filters from SQL content using sqlparse"""
+        filters = []
+        
+        try:
+            # Parse the SQL
+            parsed = sqlparse.parse(sql_content)
+            
+            for statement in parsed:
+                self.extract_from_statement(statement, filename, filters)
+        
+        except Exception as e:
+            print(f"Error parsing SQL in {filename}: {str(e)}")
+            # Fallback to regex-based extraction
+            self.extract_with_regex(sql_content, filename, filters)
+        
+        return filters
+    
+    def extract_from_statement(self, statement, filename, filters):
+        """Recursively extract filters from SQL statement tokens"""
+        for token in statement.flatten():
+            if token.ttype is Keyword and token.value.upper() in ('WHERE', 'JOIN', 'ON'):
+                # Look ahead for conditions
+                self.extract_conditions_after_keyword(statement, token, filename, filters)
+    
+    def extract_conditions_after_keyword(self, statement, keyword_token, filename, filters):
+        """Extract conditions that come after WHERE, JOIN, or ON keywords"""
+        tokens = list(statement.flatten())
+        keyword_index = tokens.index(keyword_token)
+        
+        condition_text = ""
+        for i in range(keyword_index + 1, len(tokens)):
+            token = tokens[i]
+            if token.ttype is Keyword and token.value.upper() in ('ORDER', 'GROUP', 'HAVING', 'SELECT', 'FROM'):
+                break
+            condition_text += str(token.value)
+        
+        # Parse individual conditions
+        self.parse_conditions(condition_text, filename, filters, keyword_token.value.upper())
+    
+    def parse_conditions(self, condition_text, filename, filters, clause_type):
+        """Parse individual conditions from condition text"""
+        # Split by AND/OR but keep the operators
+        parts = re.split(r'\b(AND|OR)\b', condition_text, flags=re.IGNORECASE)
+        
+        current_condition = ""
+        for part in parts:
+            part = part.strip()
+            if part.upper() in ('AND', 'OR'):
+                if current_condition:
+                    self.analyze_condition(current_condition, filename, filters, clause_type)
+                current_condition = ""
+            else:
+                current_condition = part
+        
+        if current_condition:
+            self.analyze_condition(current_condition, filename, filters, clause_type)
+    
+    def analyze_condition(self, condition, filename, filters, clause_type):
+        """Analyze a single condition"""
+        # Look for equality conditions
+        operators = ['=', '!=', '<>', '>', '<', '>=', '<=', 'LIKE', 'IN', 'NOT IN']
+        
+        for op in operators:
+            if op in condition:
+                parts = condition.split(op, 1)
+                if len(parts) == 2:
+                    left_side = parts[0].strip()
+                    right_side = parts[1].strip()
+                    
+                    # Extract table/column information
+                    table_col = self.extract_table_column(left_side)
+                    value = self.clean_value(right_side)
+                    
+                    # Check if it matches the pattern
+                    if self.matches_pattern(left_side, right_side):
+                        filters.append({
+                            'filename': filename,
+                            'clause_type': clause_type,
+                            'table_alias': table_col.get('table', ''),
+                            'column': table_col.get('column', left_side),
+                            'operator': op,
+                            'value': value,
+                            'full_condition': condition.strip()
+                        })
+                break
+    
+    def extract_table_column(self, field):
+        """Extract table and column from field reference"""
+        field = field.strip()
+        if '.' in field:
+            parts = field.split('.')
+            return {'table': parts[0].strip(), 'column': parts[1].strip()}
+        return {'table': '', 'column': field}
+    
+    def clean_value(self, value):
+        """Clean and format the value"""
+        value = value.strip()
+        # Remove quotes
+        if (value.startswith('"') and value.endswith('"')) or \
+           (value.startswith("'") and value.endswith("'")):
+            value = value[1:-1]
+        return value
+    
+    def matches_pattern(self, left_side, right_side):
+        """Check if the condition matches the specified patterns"""
+        var_pattern = self.var_pattern.get()
+        value_pattern = self.value_pattern.get()
+        
+        flags = 0 if self.case_sensitive.get() else re.IGNORECASE
+        
+        # Check variable pattern
+        if var_pattern != ".*":
+            if not re.search(var_pattern, left_side, flags):
+                return False
+        
+        # Check value pattern
+        if value_pattern != ".*":
+            cleaned_value = self.clean_value(right_side)
+            if not re.search(value_pattern, cleaned_value, flags):
+                return False
+        
+        return True
+    
+    def extract_with_regex(self, sql_content, filename, filters):
+        """Fallback regex-based extraction"""
+        # Remove comments and normalize whitespace
+        sql_content = re.sub(r'--.*?\n', '\n', sql_content)
+        sql_content = re.sub(r'/\*.*?\*/', '', sql_content, flags=re.DOTALL)
+        sql_content = re.sub(r'\s+', ' ', sql_content)
+        
+        # Pattern for WHERE conditions
+        if self.extract_where.get():
+            where_pattern = r'WHERE\s+(.+?)(?=\s+(?:ORDER\s+BY|GROUP\s+BY|HAVING|LIMIT|$))'
+            where_matches = re.finditer(where_pattern, sql_content, re.IGNORECASE | re.DOTALL)
+            
+            for match in where_matches:
+                self.parse_conditions(match.group(1), filename, filters, 'WHERE')
+        
+        # Pattern for JOIN conditions
+        if self.extract_joins.get():
+            join_pattern = r'(?:INNER\s+|LEFT\s+|RIGHT\s+|FULL\s+)?JOIN\s+\w+(?:\s+\w+)?\s+ON\s+(.+?)(?=\s+(?:INNER\s+JOIN|LEFT\s+JOIN|RIGHT\s+JOIN|FULL\s+JOIN|JOIN|WHERE|ORDER\s+BY|GROUP\s+BY|$))'
+            join_matches = re.finditer(join_pattern, sql_content, re.IGNORECASE | re.DOTALL)
+            
+            for match in join_matches:
+                self.parse_conditions(match.group(1), filename, filters, 'JOIN')
+    
+    def analyze_files(self):
+        if not self.selected_files:
+            messagebox.showwarning("Warning", "Please select SQL files first.")
+            return
+        
+        self.progress.start(10)
+        self.results.clear()
+        
+        # Clear previous results
+        for item in self.results_tree.get_children():
+            self.results_tree.delete(item)
+        
+        try:
+            for file_path in self.selected_files:
+                try:
+                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        sql_content = f.read()
+                    
+                    filename = os.path.basename(file_path)
+                    filters = self.extract_filters_from_sql(sql_content, filename)
+                    self.results.extend(filters)
+                    
+                except Exception as e:
+                    print(f"Error reading file {file_path}: {str(e)}")
+            
+            # Display results
+            for result in self.results:
+                self.results_tree.insert('', 'end', values=(
+                    result['filename'],
+                    result['clause_type'],
+                    result['table_alias'],
+                    result['column'],
+                    result['operator'],
+                    result['value'],
+                    result['full_condition']
+                ))
+            
+            messagebox.showinfo("Success", f"Analysis complete! Found {len(self.results)} filters.")
+        
+        except Exception as e:
+            messagebox.showerror("Error", f"An error occurred during analysis: {str(e)}")
+        
+        finally:
+            self.progress.stop()
+    
+    def export_results(self):
+        if not self.results:
+            messagebox.showwarning("Warning", "No results to export. Please analyze files first.")
+            return
+        
+        # Prepare data for export
+        df = pd.DataFrame(self.results)
+        
+        # Generate timestamp for filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base_filename = f"sql_filters_analysis_{timestamp}"
+        
+        try:
+            # Export to Excel
+            excel_filename = f"{base_filename}.xlsx"
+            df.to_excel(excel_filename, index=False, sheet_name='SQL Filters')
+            
+            # Export to JSON
+            json_filename = f"{base_filename}.json"
+            with open(json_filename, 'w', encoding='utf-8') as f:
+                json.dump(self.results, f, indent=2, ensure_ascii=False)
+            
+            messagebox.showinfo("Export Complete", 
+                              f"Results exported to:\n• {excel_filename}\n• {json_filename}")
+        
+        except Exception as e:
+            messagebox.showerror("Export Error", f"Failed to export results: {str(e)}")
+    
+    def clear_all(self):
+        self.selected_files.clear()
+        self.results.clear()
+        self.file_listbox.delete(0, tk.END)
+        self.file_count_label.config(text="No files selected")
+        
+        for item in self.results_tree.get_children():
+            self.results_tree.delete(item)
+        
+        messagebox.showinfo("Cleared", "All data has been cleared.")
+    
+    def run(self):
+        self.root.mainloop()
+
+if __name__ == "__main__":
+    # Required packages check
+    required_packages = ['pandas', 'sqlparse', 'openpyxl']
+    missing_packages = []
+    
+    for package in required_packages:
+        try:
+            __import__(package)
+        except ImportError:
+            missing_packages.append(package)
+    
+    if missing_packages:
+        print("Missing required packages. Please install:")
+        print(f"pip install {' '.join(missing_packages)}")
+    else:
+        app = SQLFilterExtractor()
+        app.run()
