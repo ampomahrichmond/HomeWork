@@ -1,0 +1,42 @@
+Automation & AI Team – Capability Overview
+Mission:
+Empower Data Management Operations (DMO) across CUSO with scalable Automation, AI, and Data Quality solutions to drive operational excellence and compliance.
+
+Key Metrics & KPIs:
+
+% of Automated DQ Rule Deployments
+
+of Metadata Assets Updated
+Cycle Time: Rule Intake to Deployment
+
+Rule Coverage Across Critical Data Elements
+
+Collibra Adoption & Usage Stats
+
+Current State:
+Support Coverage: Commercial, Consumer, Corporate (CCo)
+Wins:
+
+Delivered 620+ DQ rules; targeting 2000 by 2025
+
+Automated metadata ingestion from Alteryx
+
+Improved DQ monitoring and lineage search experience
+Blockers:
+
+Manual intake process (pending JIRA rollout)
+
+Inconsistent metadata tags across assets
+Risks:
+
+Long-term: Alteryx deprecation → need for robust replacement planning
+
+Next 30 Days – Priority Actions:
+
+Finalize Business Segment Metadata in Alteryx
+
+Update & Validate DQ Rule Set
+
+Launch JIRA Intake + Kanban for Capability & Enablement
+
+Align AI Use Cases with 2026 Roadmap
