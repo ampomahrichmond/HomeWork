@@ -1,0 +1,71 @@
+1. Data Testing & Transaction Testing
+
+Walk me through how you would design an end-to-end data testing framework for transaction-level data in a banking environment.
+
+What are the key differences between substantive testing, control testing, and automated QA/QC testing? Provide examples from your experience.
+
+How would you validate large transactional datasets across multiple source systems to ensure accuracy and completeness? What tools or scripts would you use?
+
+Explain a situation where you found systemic errors in transaction testing. How did you detect them, and what was the remediation process?
+
+How do you incorporate negative testing and edge-case scenarios in financial data testing?
+
+2. Data Quality & Controls
+
+How would you implement data quality rules (e.g., for critical data elements in a bank) and measure their effectiveness?
+
+Describe a time you found a material data quality issue during testing. How did you quantify its impact, and what actions did you take?
+
+What is the difference between first line of defense QA/QC testing vs. second line assurance in data management?
+
+How do you ensure traceability and lineage of data during QA and control testing? Have you used tools like Collibra for this purpose?
+
+What metrics (KPIs) do you track to monitor data control effectiveness?
+
+3. Risk Management & Audit
+
+How would you design a risk-based testing approach for a new banking product rollout?
+
+What are the most common data risk scenarios in banking, and how do you mitigate them?
+
+Explain how you would prepare for an internal audit review of data testing activities. What artifacts would you produce?
+
+Describe your experience integrating risk management technology into QA processes.
+
+How do you link operational risk incidents to your testing results to ensure risk coverage?
+
+4. Technical (SQL, Python, Automation)
+
+Write a SQL query to identify transactions where the sum of credits does not equal the sum of debits within a ledger table. How would you optimize it for performance?
+
+How would you use Python to automate a daily data validation process across multiple data sources (e.g., CSV, API, Database)?
+
+Explain how you have implemented automated controls using scripts or tools. What challenges did you face?
+
+How do you handle schema changes in automated test scripts for banking systems?
+
+What techniques do you use to ensure accuracy and scalability in large-volume data testing (billions of records)?
+
+5. Banking QA & Compliance
+
+How do you test for regulatory compliance (e.g., SOX, BCBS 239, GDPR) within data testing frameworks?
+
+Give an example where you identified a compliance breach via QA testing. How did you escalate and resolve it?
+
+What role do reconciliations play in financial data QA, and how do you automate them?
+
+Describe how you approach end-to-end testing in a core banking migration project.
+
+6. Team Management (Offshore/Onshore)
+
+How do you structure and manage an offshore QA team to ensure high-quality deliverables?
+
+What metrics do you use to measure the effectiveness and efficiency of remote teams?
+
+How do you ensure knowledge transfer and continuity between onshore and offshore testers?
+
+Describe a time you had to resolve conflicts or quality issues with an offshore team.
+
+7. Scenario-Based Case Study
+
+You are leading data QA for a new payment processing system. During UAT, you find 5% of transactions failing validation due to mismatched reference data from an upstream system. Walk me through how you would handle this issue—root cause analysis, stakeholder communication, and remediation plan.
