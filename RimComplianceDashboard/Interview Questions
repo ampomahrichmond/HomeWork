@@ -69,3 +69,35 @@ Describe a time you had to resolve conflicts or quality issues with an offshore 
 7. Scenario-Based Case Study
 
 You are leading data QA for a new payment processing system. During UAT, you find 5% of transactions failing validation due to mismatched reference data from an upstream system. Walk me through how you would handle this issue—root cause analysis, stakeholder communication, and remediation plan.
+
+
+
+A. MS Excel (Pivot, VLOOKUP, Formulas, etc.) – 3 Deep Questions
+
+Complex Data Analysis Scenario
+"You receive a dataset of 200,000 financial transactions across multiple business lines and months. Management asks for a summary showing monthly totals, variance from the previous month, and highlighting any branch exceeding a 15% variance. How would you approach this in Excel? What functions and features would you use, and why?"
+Follow-up probe: "How would you make your solution dynamic so that when new data is added, no manual updates are needed?"
+
+Lookup & Data Integration
+"Imagine you have two large datasets: one contains customer IDs and transaction amounts, and the other contains customer IDs and branch details. Some IDs are missing in one dataset. How would you match these, identify mismatches, and ensure accuracy in Excel? Which functions would you rely on, and why would you choose those over alternatives?"
+Follow-up probe: "How would you troubleshoot errors like #N/A or duplicate mismatches in this process?"
+
+Formula Optimization & Error Handling
+"You've been given a spreadsheet with multiple nested IF statements to calculate fees for different transaction types. Users report it's slow and error-prone. How would you optimize this logic using more efficient functions, and what approach would you take to make it easier to maintain?"
+Follow-up probe: "How do you typically debug and validate complex formulas in a high-pressure environment?"
+
+B. Collibra (Experience & Expertise) – 3 Deep Questions
+
+Practical Implementation & Use
+"Describe a specific situation where you used Collibra to support a data testing or data quality initiative. What features did you leverage (e.g., Data Catalog, Governance, Lineage), and how did it help address a real business challenge?"
+Follow-up probe: "What limitations did you encounter, and how did you work around them?"
+
+Data Lineage & Issue Resolution
+"If you discovered that a critical data element’s lineage in Collibra did not match what you found in the source system, how would you investigate and resolve the discrepancy? Who would you involve, and how would you document your findings?"
+Follow-up probe: "How do you ensure lineage accuracy is maintained over time?"
+
+Governance & Stakeholder Engagement
+"How have you used Collibra to ensure regulatory compliance (e.g., SOX, BCBS239, GDPR) in a banking environment? What specific processes or workflows did you configure or rely on to satisfy auditors or regulators?"
+Follow-up probe: "What kind of evidence or reporting do you typically extract from Collibra for audits?"
+
+
