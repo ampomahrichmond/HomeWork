@@ -1,0 +1,37 @@
+he purpose of this attestation is to review and validate user access to three designated Active Directory (AD) groups that support Alteryx workflow automation and reporting. This process ensures compliance with SOX access control requirements by confirming that only authorized individuals maintain access and that inappropriate or unnecessary access is promptly removed.
+
+Scope of Groups
+
+NODWORK1 – This group is locked down. It provides access exclusively to the Data Quality Automation Team for building, maintaining, and executing Alteryx workflows, which are stored solely within this environment. Membership is tightly controlled, and no external or non-team users are permitted.
+
+NODWORK2 & NODWORK3 – These groups provide access to reports and outputs generated from the Alteryx workflows. Membership includes a broader set of users, some of whom may no longer require access. Access to these groups is subject to review and validation.
+
+Purpose of Attestation
+
+To provide management and auditors with evidence that user access rights are periodically reviewed and aligned with the principle of least privilege.
+
+To confirm that all users listed in each group have a documented business need for access.
+
+To identify and remove users who do not require access, thereby reducing the risk of unauthorized use of Alteryx workflows, reports, or outputs.
+
+Attestation Process / Steps
+
+Extract current membership lists for NODWORK1, NODWORK2, and NODWORK3.
+
+Distribute the lists to Data Owners and Managers for review.
+
+Validate business justification for each user’s continued access.
+
+Document approvals, required removals, and rationale.
+
+Action removal requests by coordinating with IT Security / AD administrators.
+
+Retain attestation evidence (membership list, reviewer sign-off, and change logs) as part of SOX control documentation.
+
+Outcome
+
+Assurance that AD group access to Alteryx workflows, reports, and outputs is actively managed and documented.
+
+Evidence that controls over user access are functioning as designed.
+
+Reduction of SOX compliance risk through timely revocation of unnecessary access.
