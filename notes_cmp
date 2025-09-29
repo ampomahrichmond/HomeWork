@@ -1,0 +1,34 @@
+DQ Rule Change Management Process
+Formal Initiation and Requirements Definition:
+
+Change requests for new or updated Data Quality (DQ) rules are formally submitted and tracked via JIRA, including detailed business requirements and specifications.
+
+Development and Configuration:
+
+The Automation Team develops the rule logic and workflow configuration using approved tools, specifically SQL and Alteryx.
+
+Development is performed in a non-production environment to maintain system integrity.
+
+Independent Technical Peer Review:
+
+Before testing, a technical peer review is conducted by an independent member of the Automation Team. This review verifies the technical accuracy and adherence of the rule logic and Alteryx workflows to the documented requirements.
+
+User Acceptance Testing (UAT) and Validation:
+
+The developed rule output is provided to the business Requestor for independent validation.
+
+The Requestor performs User Acceptance Testing (UAT) to confirm the results meet the defined business specifications and requirements.
+
+Formal Approval and Sign-off:
+
+Upon successful UAT, the Requestor formally approves the change, providing documented sign-off for the rule update or creation to be moved to the production environment. This step ensures proper Segregation of Duties between development and approval.
+
+Deployment to Production:
+
+Following mandatory approvals, the Automation Team manages the deployment of the validated rule logic and associated changes into the production environment.
+
+The Requestor is formally notified upon successful implementation.
+
+Traceability and Documentation:
+
+The JIRA ticket serves as the audit trail, documenting all stages from initial request through technical review, UAT, final approval, and production implementation, before being marked as Completed.
