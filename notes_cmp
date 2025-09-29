@@ -75,3 +75,39 @@ Best regards,
 [Your Name]
 [Your Title]
 [Your Department/Division]
+
+
+
+
+1. Access Listing and Scope Definition
+Request Initiation: Initiate a formal request with IT Security (via ServiceNow) to procure a complete list of all users currently holding access to the Active Directory (AD) group associated with the Alteryx workflow network drives.
+
+Documentation: The generated list serves as the official scope document for the attestation cycle.
+
+2. Attestation Review and Assignment
+AD Group Reconciliation: The Automation/DQ Team reviews the provided user list against the current AD group membership to ensure accuracy and confirm the individuals requiring attestation.
+
+Management Accountability: Access lists are segmented and formally distributed to the respective People Managers via an auditable communication channel (e.g., email).
+
+Goal: To establish accountability for each user's continued access needs.
+
+3. Formal Manager Confirmation
+Required Action: People Managers are required to formally respond, confirming one of two actions for each of their listed associates:
+
+Continued Access: Confirmation that the user still requires access for their current role and responsibilities.
+
+Access Removal: Confirmation that the user no longer requires access (e.g., due to role change, termination, or transfer).
+
+Deadline Enforcement: A defined deadline is established and communicated to ensure timely completion of the review.
+
+4. Remediation and Access Revocation
+Consolidation: All formal responses are compiled by the Automation/DQ Team to identify users confirmed for removal.
+
+Change Request: A formal, documented request is submitted (e.g., via a new ServiceNow ticket) to IT Security or the designated team to immediately revoke the network drive access for all users designated for removal.
+
+Verification: The team verifies the removal confirmation to ensure the principle of Least Privilege is maintained.
+
+5. Final Documentation and Audit Trail
+Record Retention: All documentation, including the initial access list, the formal manager confirmation emails, and the final access removal requests (ServiceNow tickets), are retained as the official audit trail for the bi-annual attestation cycle.
+
+Completion: The process is officially closed, providing assurance that network drive access remains appropriate and consistent with current business needs.
