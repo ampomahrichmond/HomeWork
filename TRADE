@@ -1,0 +1,1626 @@
+import tkinter as tk
+from tkinter import ttk, scrolledtext, messagebox
+from tkcalendar import DateEntry
+import threading
+import queue
+import time
+import json
+import os
+from datetime import datetime, timedelta
+from collections import defaultdict
+import pytz
+import pandas as pd
+import numpy as np
+import pandas_ta as ta
+import alpaca_trade_api as tradeapi
+from alpaca_trade_api.rest import TimeFrame
+
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
+def load_api_credentials():
+    """Load API credentials"""
+    config_path = "api_config.json"
+    if os.path.exists(config_path):
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+            return config.get('api_key'), config.get('api_secret'), config.get('base_url')
+    
+    api_key = os.getenv('ALPACA_API_KEY', 'PKMXLBZDCP3TLNXAQZVG')
+    api_secret = os.getenv('ALPACA_API_SECRET', 'nX1la73lKsdavYO0DbbUaobfVEfJBXwWRZxHxKje')
+    base_url = os.getenv('ALPACA_BASE_URL', 'https://paper-api.alpaca.markets')
+    return api_key, api_secret, base_url
+
+API_KEY, API_SECRET, BASE_URL = load_api_credentials()
+
+# =============================================================================
+# TRADING SESSIONS
+# =============================================================================
+
+class TradingSession:
+    PREMARKET = "premarket"
+    INTRADAY = "intraday"
+    AFTERMARKET = "aftermarket"
+    CLOSED = "closed"
+
+# =============================================================================
+# PERFORMANCE TRACKING
+# =============================================================================
+
+class PerformanceTracker:
+    def __init__(self):
+        self.trades = []
+        self.daily_pnl = 0
+        self.total_pnl = 0
+        self.winning_trades = 0
+        self.losing_trades = 0
+        self.session_trades = defaultdict(list)
+        self.session_pnl = defaultdict(float)
+    
+    def add_trade(self, symbol, entry_price, exit_price, quantity, strategy, session, entry_time=None):
+        pnl = (exit_price - entry_price) * quantity
+        pnl_pct = ((exit_price - entry_price) / entry_price) * 100
+        
+        trade_record = {
+            'symbol': symbol,
+            'entry': entry_price,
+            'exit': exit_price,
+            'qty': quantity,
+            'pnl': pnl,
+            'pnl_pct': pnl_pct,
+            'strategy': strategy,
+            'session': session,
+            'timestamp': datetime.now(),
+            'entry_time': entry_time or datetime.now()
+        }
+        
+        self.trades.append(trade_record)
+        self.session_trades[session].append(trade_record)
+        self.total_pnl += pnl
+        self.daily_pnl += pnl
+        self.session_pnl[session] += pnl
+        
+        if pnl > 0:
+            self.winning_trades += 1
+        else:
+            self.losing_trades += 1
+    
+    def get_win_rate(self):
+        total = self.winning_trades + self.losing_trades
+        return (self.winning_trades / total * 100) if total > 0 else 0
+    
+    def get_session_stats(self, session):
+        trades = self.session_trades[session]
+        if not trades:
+            return {"trades": 0, "pnl": 0, "win_rate": 0}
+        
+        wins = sum(1 for t in trades if t['pnl'] > 0)
+        return {
+            "trades": len(trades),
+            "pnl": self.session_pnl[session],
+            "win_rate": (wins / len(trades) * 100) if trades else 0
+        }
+    
+    def reset_daily(self):
+        self.daily_pnl = 0
+        self.session_pnl.clear()
+
+# =============================================================================
+# ENHANCED TRADING BOT WITH MULTI-SESSION SUPPORT
+# =============================================================================
+
+class EnhancedTradingBot:
+    def __init__(self, config, log_queue):
+        self.api = tradeapi.REST(API_KEY, API_SECRET, base_url=BASE_URL, api_version='v2')
+        self.config = config
+        self.log_queue = log_queue
+        self.performance = PerformanceTracker()
+        
+        # Position tracking
+        self.active_positions = {}
+        self.traded_today = set()
+        self.trailing_stops = {}
+        
+        # Session tracking
+        self.current_session = TradingSession.CLOSED
+        self.session_trades_count = defaultdict(int)
+        
+        # Session-specific limits
+        self.session_limits = {
+            TradingSession.PREMARKET: config.get('premarket_max_positions', 4),
+            TradingSession.INTRADAY: config.get('intraday_max_positions', 10),
+            TradingSession.AFTERMARKET: config.get('aftermarket_max_positions', 5)
+        }
+        
+        # Session enable/disable
+        self.session_enabled = {
+            TradingSession.PREMARKET: config.get('enable_premarket', True),
+            TradingSession.INTRADAY: config.get('enable_intraday', True),
+            TradingSession.AFTERMARKET: config.get('enable_aftermarket', True)
+        }
+        
+        # Risk management
+        self.daily_loss_limit = config.get('max_daily_loss', 1000)
+        self.max_position_size = config.get('max_position_size', 5000)
+        self.take_profit_pct = config.get('take_profit_pct', 3.0)
+        self.stop_loss_pct = config.get('stop_loss_pct', 2.0)
+        
+        # Extended hours need wider stops due to low liquidity
+        self.extended_hours_stop_loss_pct = config.get('extended_hours_stop_loss', 5.0)
+        
+        self.use_trailing_stop = config.get('use_trailing_stop', False)
+        self.trailing_stop_pct = config.get('trailing_stop_pct', 1.0)
+        self.min_confidence = config.get('min_confidence', 65)
+        self.time_between_trades = config.get('time_between_trades', 5)
+        
+        # Trade timing
+        self.last_trade_time = datetime.now() - timedelta(minutes=10)
+        
+        # Watchlist
+        self.watchlist = set()
+        self.last_watchlist_update = datetime.now() - timedelta(minutes=10)
+        
+        self.log("✅ Multi-Session Trading Bot Initialized")
+        
+        # Log enabled sessions
+        enabled_sessions = []
+        if self.session_enabled[TradingSession.PREMARKET]:
+            enabled_sessions.append(f"Pre-Market: {self.session_limits['premarket']} trades")
+        if self.session_enabled[TradingSession.INTRADAY]:
+            enabled_sessions.append(f"Intraday: {self.session_limits['intraday']} trades")
+        if self.session_enabled[TradingSession.AFTERMARKET]:
+            enabled_sessions.append(f"After-Market: {self.session_limits['aftermarket']} trades")
+        
+        for session_info in enabled_sessions:
+            self.log(f"📊 {session_info}")
+        
+        self.log(f"💰 Exits: TP={self.take_profit_pct}%, SL={self.stop_loss_pct}% (Regular)")
+        self.log(f"💰 Extended Hours SL: {self.extended_hours_stop_loss_pct}%")
+        
+        self.test_api_connection()
+    
+    def log(self, message):
+        self.log_queue.put(message)
+    
+    def test_api_connection(self):
+        try:
+            self.log("🔬 Testing API connection...")
+            account = self.api.get_account()
+            self.log(f"   ✅ Account: ${float(account.buying_power):,.2f} buying power")
+        except Exception as e:
+            self.log(f"   🔥 API Test Failed: {e}")
+    
+    def check_daily_loss_limit(self):
+        if abs(self.performance.daily_pnl) >= self.daily_loss_limit:
+            self.log(f"🛑 DAILY LOSS LIMIT: ${self.performance.daily_pnl:.2f}")
+            return True
+        return False
+    
+    def is_session_enabled(self):
+        """Check if current session is enabled"""
+        return self.session_enabled.get(self.current_session, False)
+    
+    def get_current_session_limit(self):
+        return self.session_limits.get(self.current_session, 0)
+    
+    def can_trade_in_session(self):
+        if not self.is_session_enabled():
+            return False
+        
+        session_count = self.session_trades_count[self.current_session]
+        session_limit = self.get_current_session_limit()
+        return session_count < session_limit
+    
+    def build_watchlist(self):
+        """Build fresh watchlist"""
+        self.log("🔍 Building watchlist...")
+        
+        try:
+            priority_stocks = [
+                'SPY', 'QQQ', 'AAPL', 'TSLA', 'NVDA', 'MSFT', 'AMD', 'META', 
+                'AMZN', 'GOOGL', 'NFLX', 'DIS', 'BA', 'F', 'GE',
+                'JPM', 'BAC', 'WFC', 'GS', 'XOM', 'CVX',
+                'PLTR', 'SOFI', 'HOOD', 'NIO', 'RIVN', 'COIN',
+                'SQ', 'PYPL', 'V', 'MA', 'ADBE', 'CRM', 'ORCL'
+            ]
+            
+            candidates = []
+            
+            for symbol in priority_stocks:
+                try:
+                    quote = self.api.get_latest_quote(symbol)
+                    if quote and quote.ap and quote.ap >= self.config['min_price']:
+                        candidates.append({'symbol': symbol, 'score': 100})
+                except:
+                    continue
+            
+            try:
+                assets = self.api.list_assets(status='active', asset_class='us_equity')
+                symbols = [a.symbol for a in assets if a.tradable][:2000]
+                
+                for i in range(0, min(len(symbols), 2000), 1000):
+                    chunk = symbols[i:i+1000]
+                    snapshots = self.api.get_snapshots(chunk)
+                    
+                    for ticker, snap in snapshots.items():
+                        if ticker in [c['symbol'] for c in candidates]:
+                            continue
+                        
+                        try:
+                            if not (snap.prev_daily_bar and snap.latest_trade):
+                                continue
+                            
+                            price = snap.latest_trade.p
+                            if price < self.config['min_price']:
+                                continue
+                            
+                            volume = snap.daily_bar.v if snap.daily_bar else 0
+                            if volume < self.config['min_volume']:
+                                continue
+                            
+                            candidates.append({'symbol': ticker, 'score': 50})
+                        except:
+                            continue
+            except:
+                pass
+            
+            self.watchlist = set(c['symbol'] for c in candidates[:200])
+            self.log(f"✅ Watchlist: {len(self.watchlist)} stocks")
+            self.last_watchlist_update = datetime.now()
+            
+        except Exception as e:
+            self.log(f"🔥 Watchlist Error: {e}")
+            self.watchlist = set(priority_stocks[:50])
+    
+    def scan_and_execute(self):
+        """Scan for quality trades"""
+        if self.check_daily_loss_limit():
+            return
+        
+        if not self.can_trade_in_session():
+            return
+        
+        # Cooldown
+        time_since_last = (datetime.now() - self.last_trade_time).total_seconds() / 60
+        if time_since_last < self.time_between_trades:
+            return
+        
+        # Rebuild watchlist
+        if (datetime.now() - self.last_watchlist_update).total_seconds() > 120:
+            self.build_watchlist()
+        
+        if not self.watchlist:
+            return
+        
+        available = [s for s in self.watchlist 
+                    if s not in self.active_positions 
+                    and s not in self.traded_today]
+        
+        if not available:
+            return
+        
+        session_count = self.session_trades_count[self.current_session]
+        session_limit = self.get_current_session_limit()
+        
+        self.log(f"🎯 [{self.current_session.upper()}] Scanning ({session_count}/{session_limit} used)...")
+        
+        best_candidates = []
+        
+        try:
+            for i in range(0, min(len(available), 150), 50):
+                batch = available[i:i+50]
+                
+                try:
+                    snapshots = self.api.get_snapshots(batch)
+                    
+                    for symbol, snap in snapshots.items():
+                        if symbol in self.active_positions or symbol in self.traded_today:
+                            continue
+                        
+                        try:
+                            if not (snap.latest_trade and snap.prev_daily_bar):
+                                continue
+                            
+                            current_price = snap.latest_trade.p
+                            prev_close = snap.prev_daily_bar.c
+                            
+                            if not current_price or not prev_close or prev_close == 0:
+                                continue
+                            
+                            confidence = 0
+                            reasons = []
+                            
+                            day_change_pct = ((current_price - prev_close) / prev_close) * 100
+                            
+                            if day_change_pct < 0.3:
+                                continue
+                            
+                            if day_change_pct >= 0.5:
+                                confidence += 25
+                                reasons.append(f"+{day_change_pct:.1f}%")
+                            if day_change_pct >= 1.0:
+                                confidence += 20
+                            if day_change_pct >= 2.0:
+                                confidence += 15
+                            
+                            current_vol = snap.daily_bar.v if snap.daily_bar else 0
+                            avg_vol = snap.prev_daily_bar.v if snap.prev_daily_bar else 1
+                            vol_ratio = current_vol / avg_vol if avg_vol > 0 else 0
+                            
+                            if vol_ratio < 1.0:
+                                continue
+                            
+                            if vol_ratio >= 1.5:
+                                confidence += 20
+                                reasons.append(f"{vol_ratio:.1f}x vol")
+                            if vol_ratio >= 2.0:
+                                confidence += 15
+                            
+                            if snap.minute_bar:
+                                if snap.minute_bar.c > snap.minute_bar.o:
+                                    confidence += 15
+                                    reasons.append("bullish")
+                                else:
+                                    confidence -= 10
+                            
+                            if day_change_pct > 10:
+                                confidence -= 15
+                            
+                            if confidence >= self.min_confidence:
+                                best_candidates.append({
+                                    'symbol': symbol,
+                                    'price': current_price,
+                                    'confidence': confidence,
+                                    'reasons': reasons
+                                })
+                        except:
+                            continue
+                except:
+                    continue
+            
+            best_candidates.sort(key=lambda x: x['confidence'], reverse=True)
+            
+            if not best_candidates:
+                self.log(f"   ℹ️ No quality signals found")
+                return
+            
+            # Show top 3
+            for i, cand in enumerate(best_candidates[:3], 1):
+                self.log(f"      {i}. {cand['symbol']}: {cand['confidence']}% ({', '.join(cand['reasons'])})")
+            
+            # Execute best one
+            best = best_candidates[0]
+            self.log(f"   ✅ SELECTED: {best['symbol']} ({best['confidence']}%)")
+            
+            # Use limit orders for extended hours
+            if self.current_session in [TradingSession.PREMARKET, TradingSession.AFTERMARKET]:
+                success = self.execute_extended_hours_trade(best['symbol'], best['price'])
+            else:
+                success = self.execute_market_trade(best['symbol'], best['price'])
+            
+            if success:
+                self.last_trade_time = datetime.now()
+                self.session_trades_count[self.current_session] += 1
+                new_count = self.session_trades_count[self.current_session]
+                self.log(f"   💰 BOUGHT {best['symbol']} - Session: {new_count}/{session_limit}")
+        
+        except Exception as e:
+            self.log(f"🔥 Scan Error: {e}")
+    
+    def execute_market_trade(self, symbol, price):
+        """Execute market order for regular hours"""
+        try:
+            max_spend = min(self.config['max_spend_per_stock'], self.max_position_size)
+            qty = int(max_spend // price)
+            
+            if qty <= 0:
+                return False
+            
+            order = self.api.submit_order(
+                symbol=symbol,
+                qty=qty,
+                side='buy',
+                type='market',
+                time_in_force='day'
+            )
+            
+            self.active_positions[symbol] = {
+                'entry_price': price,
+                'quantity': qty,
+                'strategy': self.current_session,
+                'stop_loss_pct': self.stop_loss_pct,
+                'take_profit_pct': self.take_profit_pct,
+                'entry_time': datetime.now(),
+                'highest_price': price,
+                'session': self.current_session
+            }
+            
+            self.trailing_stops[symbol] = price * (1 - self.stop_loss_pct / 100)
+            return True
+            
+        except Exception as e:
+            self.log(f"   🔥 Order failed: {e}")
+            return False
+    
+    def execute_extended_hours_trade(self, symbol, price):
+        """Execute limit order for pre/after market with wider stops"""
+        try:
+            max_spend = min(self.config['max_spend_per_stock'], self.max_position_size)
+            qty = int(max_spend // price)
+            
+            if qty <= 0:
+                return False
+            
+            # Use limit order at current ask price for quick execution
+            try:
+                quote = self.api.get_latest_quote(symbol)
+                limit_price = quote.ap if quote.ap else price
+            except:
+                limit_price = price
+            
+            # Use wider stop loss for extended hours
+            extended_stop_loss = self.extended_hours_stop_loss_pct
+            
+            order = self.api.submit_order(
+                symbol=symbol,
+                qty=qty,
+                side='buy',
+                type='limit',
+                limit_price=round(limit_price, 2),
+                time_in_force='day',
+                extended_hours=True
+            )
+            
+            self.active_positions[symbol] = {
+                'entry_price': limit_price,
+                'quantity': qty,
+                'strategy': self.current_session,
+                'stop_loss_pct': extended_stop_loss,  # Wider stop for extended hours
+                'take_profit_pct': self.take_profit_pct,
+                'entry_time': datetime.now(),
+                'highest_price': limit_price,
+                'session': self.current_session,
+                'order_id': order.id
+            }
+            
+            self.trailing_stops[symbol] = limit_price * (1 - extended_stop_loss / 100)
+            self.log(f"   📋 Limit order @ ${limit_price:.2f} (SL: {extended_stop_loss}%)")
+            return True
+            
+        except Exception as e:
+            self.log(f"   🔥 Extended hours order failed: {e}")
+            return False
+    
+    def monitor_positions(self):
+        """Monitor and exit positions"""
+        if not self.active_positions:
+            return
+        
+        try:
+            symbols = list(self.active_positions.keys())
+            
+            # Verify positions still exist with broker
+            try:
+                broker_positions = {p.symbol: p for p in self.api.list_positions()}
+                
+                # Remove positions that no longer exist with broker
+                for symbol in list(self.active_positions.keys()):
+                    if symbol not in broker_positions:
+                        self.log(f"🔥 Exit Error: position not found: {symbol}")
+                        # Remove from tracking to stop repeated errors
+                        del self.active_positions[symbol]
+                        if symbol in self.trailing_stops:
+                            del self.trailing_stops[symbol]
+                        self.traded_today.add(symbol)
+                        continue
+            except Exception as e:
+                self.log(f"🔥 Monitor Error checking positions: {e}")
+                return
+            
+            quotes = self.api.get_latest_quotes(symbols)
+            
+            for symbol in list(self.active_positions.keys()):
+                try:
+                    if symbol not in quotes:
+                        continue
+                    
+                    quote = quotes[symbol]
+                    current_price = quote.bp or quote.ap
+                    
+                    if not current_price or current_price <= 0:
+                        continue
+                    
+                    pos = self.active_positions[symbol]
+                    entry_price = pos['entry_price']
+                    pnl_pct = ((current_price - entry_price) / entry_price) * 100
+                    
+                    # Update trailing stop
+                    if current_price > pos['highest_price']:
+                        pos['highest_price'] = current_price
+                        
+                        if self.use_trailing_stop and pnl_pct > 0:
+                            trailing_pct = self.trailing_stop_pct / 100
+                            new_trailing = current_price * (1 - trailing_pct)
+                            configured_stop = entry_price * (1 - pos['stop_loss_pct'] / 100)
+                            new_trailing = max(new_trailing, configured_stop)
+                            
+                            if new_trailing > self.trailing_stops[symbol]:
+                                self.trailing_stops[symbol] = new_trailing
+                    
+                    # Exit conditions
+                    should_exit = False
+                    reason = ""
+                    
+                    if pnl_pct >= pos['take_profit_pct']:
+                        should_exit = True
+                        reason = f"Take Profit @ {pnl_pct:.2f}%"
+                    elif pnl_pct <= -pos['stop_loss_pct']:
+                        should_exit = True
+                        reason = f"Stop Loss @ {pnl_pct:.2f}%"
+                    elif self.use_trailing_stop and current_price <= self.trailing_stops[symbol]:
+                        configured_stop = entry_price * (1 - pos['stop_loss_pct'] / 100)
+                        if current_price > configured_stop:
+                            should_exit = True
+                            reason = f"Trailing Stop @ {pnl_pct:.2f}%"
+                    
+                    if should_exit:
+                        self.exit_position(symbol, current_price, reason)
+                
+                except Exception as e:
+                    # Log but don't crash on individual position errors
+                    pass
+        except Exception as e:
+            self.log(f"🔥 Monitor Error: {e}")
+    
+    def liquidate_profitable_positions(self):
+        """Liquidate ONLY profitable positions before market close"""
+        if not self.active_positions:
+            return
+        
+        self.log("⏰ Liquidating PROFITABLE intraday positions...")
+        
+        profitable_count = 0
+        kept_count = 0
+        
+        for symbol in list(self.active_positions.keys()):
+            try:
+                pos = self.active_positions[symbol]
+                
+                # Only liquidate intraday positions
+                if pos['session'] != TradingSession.INTRADAY:
+                    continue
+                
+                quote = self.api.get_latest_quote(symbol)
+                current_price = quote.bp or quote.ap
+                
+                if not current_price:
+                    continue
+                
+                pnl_pct = ((current_price - pos['entry_price']) / pos['entry_price']) * 100
+                
+                # Only close if profitable
+                if pnl_pct > 0.5:  # At least 0.5% profit
+                    self.exit_position(symbol, current_price, f"End of Day Close @ {pnl_pct:.2f}%")
+                    profitable_count += 1
+                else:
+                    kept_count += 1
+                    self.log(f"   ⏸️ Keeping {symbol} (P&L: {pnl_pct:+.2f}%) overnight")
+            
+            except Exception as e:
+                self.log(f"   ⚠️ Error checking {symbol}: {e}")
+        
+        self.log(f"✅ Closed {profitable_count} profitable, kept {kept_count} positions")
+    
+    def exit_position(self, symbol, exit_price, reason):
+        """Exit a position"""
+        try:
+            pos = self.active_positions[symbol]
+            
+            # Use limit order for extended hours
+            eastern = pytz.timezone('US/Eastern')
+            now = datetime.now(eastern).time()
+            market_open = datetime.strptime("09:30", "%H:%M").time()
+            market_close = datetime.strptime("16:00", "%H:%M").time()
+            
+            if market_open <= now < market_close:
+                # Market hours - use market order
+                self.api.close_position(symbol)
+            else:
+                # Extended hours - use limit order
+                try:
+                    quote = self.api.get_latest_quote(symbol)
+                    limit_price = quote.bp if quote.bp else exit_price
+                    
+                    self.api.submit_order(
+                        symbol=symbol,
+                        qty=pos['quantity'],
+                        side='sell',
+                        type='limit',
+                        limit_price=round(limit_price, 2),
+                        time_in_force='day',
+                        extended_hours=True
+                    )
+                except:
+                    self.api.close_position(symbol)
+            
+            pnl = (exit_price - pos['entry_price']) * pos['quantity']
+            pnl_pct = ((exit_price - pos['entry_price']) / pos['entry_price']) * 100
+            
+            self.log(f"   {'✅' if pnl > 0 else '❌'} CLOSED: {symbol} @ ${exit_price:.2f}")
+            self.log(f"      {reason}, P&L: ${pnl:+.2f} ({pnl_pct:+.2f}%)")
+            
+            self.performance.add_trade(
+                symbol, pos['entry_price'], exit_price,
+                pos['quantity'], pos['strategy'], pos['session'], pos['entry_time']
+            )
+            
+            del self.active_positions[symbol]
+            if symbol in self.trailing_stops:
+                del self.trailing_stops[symbol]
+            self.traded_today.add(symbol)
+        
+        except Exception as e:
+            self.log(f"🔥 Exit Error: {e}")
+    
+    def liquidate_all_positions(self):
+        """Close all bot positions"""
+        if not self.active_positions:
+            return
+        
+        self.log(f"🔄 Liquidating {len(self.active_positions)} positions...")
+        
+        for symbol in list(self.active_positions.keys()):
+            try:
+                quote = self.api.get_latest_quote(symbol)
+                exit_price = quote.bp or quote.ap
+                if exit_price:
+                    self.exit_position(symbol, exit_price, "Manual Liquidation")
+            except Exception as e:
+                self.log(f"   Error: {e}")
+    
+    def get_bot_managed_symbols(self):
+        return set(self.active_positions.keys())
+    
+    def is_bot_managed(self, symbol):
+        return symbol in self.active_positions
+    
+    def reset_daily_metrics(self):
+        self.log("🔄 Resetting daily metrics...")
+        self.performance.reset_daily()
+        self.traded_today.clear()
+        self.session_trades_count.clear()
+        self.watchlist.clear()
+        self.log("✅ Reset complete")
+
+# =============================================================================
+# UI
+# =============================================================================
+
+class TradingBotApp:
+    def __init__(self, root):
+        self.root = root
+        self.log_queue = queue.Queue()
+        self.stop_event = threading.Event()
+        self.bot_thread = None
+        self.active_bot = None
+        
+        self.root.title("🚀 Multi-Session Trading Bot v4.2 - MON-FRI ONLY")
+        self.root.geometry("1700x1000")
+        
+        self.config_file = "bot_config.json"
+        
+        self._create_ui()
+        self.load_config()
+        
+        # Set initial title with day
+        self._update_window_title()
+        
+        self.root.after(100, self.process_log_queue)
+        self.root.after(1000, self.update_stats)
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+    
+    def _update_window_title(self):
+        """Update window title with current day"""
+        try:
+            eastern = pytz.timezone('US/Eastern')
+            now = datetime.now(eastern)
+            day_name = now.strftime("%A")
+            is_weekend = now.weekday() >= 5
+            
+            if is_weekend:
+                self.root.title(f"🚀 Trading Bot v4.2 - {day_name} (WEEKEND)")
+            else:
+                self.root.title(f"🚀 Trading Bot v4.2 - {day_name} (WEEKDAY)")
+        except:
+            self.root.title("🚀 Trading Bot v4.2 - MON-FRI ONLY")
+    
+    def _create_ui(self):
+        left_frame = ttk.Frame(self.root, width=380)
+        left_frame.pack(side="left", fill="y", padx=5, pady=5)
+        left_frame.pack_propagate(False)
+        
+        right_frame = ttk.Frame(self.root)
+        right_frame.pack(side="right", fill="both", expand=True, padx=5, pady=5)
+        
+        self._create_config_panel(left_frame)
+        self._create_display_panel(right_frame)
+    
+    def _create_config_panel(self, parent):
+        # Create canvas with scrollbar for config panel
+        canvas = tk.Canvas(parent, width=360)
+        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Enable mousewheel scrolling
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        
+        # Session Enable/Disable
+        enable_frame = ttk.LabelFrame(scrollable_frame, text="🔛 Enable Trading Sessions", padding=10)
+        enable_frame.pack(fill="x", pady=5, padx=5)
+        
+        self.enable_premarket_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(enable_frame, text="🌅 Pre-Market (6:30-9:30 AM)",
+                       variable=self.enable_premarket_var,
+                       command=self.update_session_status).pack(anchor="w", pady=2)
+        
+        self.enable_intraday_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(enable_frame, text="☀️ Intraday (9:30 AM - 4:00 PM)",
+                       variable=self.enable_intraday_var,
+                       command=self.update_session_status).pack(anchor="w", pady=2)
+        
+        self.enable_aftermarket_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(enable_frame, text="🌙 After-Market (4:00-8:00 PM)",
+                       variable=self.enable_aftermarket_var,
+                       command=self.update_session_status).pack(anchor="w", pady=2)
+        
+        ttk.Label(enable_frame, text="⚠️ Extended hours = higher risk",
+                 font=("Arial", 8), foreground="red").pack(anchor="w", pady=(5,0))
+        
+        # Session Configuration
+        session_frame = ttk.LabelFrame(scrollable_frame, text="📅 Session Limits", padding=10)
+        session_frame.pack(fill="x", pady=5, padx=5)
+        
+        ttk.Label(session_frame, text="Pre-Market Max Trades:").pack(anchor="w")
+        self.premarket_max_var = tk.IntVar(value=4)
+        ttk.Scale(session_frame, from_=1, to=10, variable=self.premarket_max_var,
+                 orient="horizontal").pack(fill="x")
+        ttk.Label(session_frame, textvariable=self.premarket_max_var).pack(anchor="e")
+        
+        ttk.Label(session_frame, text="Intraday Max Trades:").pack(anchor="w", pady=(10,0))
+        self.intraday_max_var = tk.IntVar(value=10)
+        ttk.Scale(session_frame, from_=1, to=20, variable=self.intraday_max_var,
+                 orient="horizontal").pack(fill="x")
+        ttk.Label(session_frame, textvariable=self.intraday_max_var).pack(anchor="e")
+        
+        ttk.Label(session_frame, text="After-Market Max Trades:").pack(anchor="w", pady=(10,0))
+        self.aftermarket_max_var = tk.IntVar(value=5)
+        ttk.Scale(session_frame, from_=1, to=10, variable=self.aftermarket_max_var,
+                 orient="horizontal").pack(fill="x")
+        ttk.Label(session_frame, textvariable=self.aftermarket_max_var).pack(anchor="e")
+        
+        # Strategy
+        strategy_frame = ttk.LabelFrame(scrollable_frame, text="📊 Strategy", padding=10)
+        strategy_frame.pack(fill="x", pady=5, padx=5)
+        
+        ttk.Label(strategy_frame, text="Confidence Threshold (%):").pack(anchor="w")
+        self.min_confidence_var = tk.IntVar(value=65)
+        ttk.Scale(strategy_frame, from_=50, to=90, variable=self.min_confidence_var,
+                 orient="horizontal").pack(fill="x")
+        ttk.Label(strategy_frame, textvariable=self.min_confidence_var).pack(anchor="e")
+        
+        ttk.Label(strategy_frame, text="Time Between Trades (min):").pack(anchor="w", pady=(10,0))
+        self.time_between_var = tk.IntVar(value=5)
+        ttk.Scale(strategy_frame, from_=1, to=30, variable=self.time_between_var,
+                 orient="horizontal").pack(fill="x")
+        ttk.Label(strategy_frame, textvariable=self.time_between_var).pack(anchor="e")
+        
+        ttk.Label(strategy_frame, text="Max $ per Trade:").pack(anchor="w", pady=(10,0))
+        self.max_spend_var = tk.DoubleVar(value=500.0)
+        ttk.Entry(strategy_frame, textvariable=self.max_spend_var).pack(fill="x")
+        
+        # Filters
+        filter_frame = ttk.LabelFrame(scrollable_frame, text="🔍 Filters", padding=10)
+        filter_frame.pack(fill="x", pady=5, padx=5)
+        
+        ttk.Label(filter_frame, text="Min Price ($):").pack(anchor="w")
+        self.min_price_var = tk.DoubleVar(value=1.0)
+        ttk.Entry(filter_frame, textvariable=self.min_price_var).pack(fill="x", pady=2)
+        
+        ttk.Label(filter_frame, text="Min Volume:").pack(anchor="w", pady=(10,0))
+        self.min_volume_var = tk.IntVar(value=100000)
+        ttk.Entry(filter_frame, textvariable=self.min_volume_var).pack(fill="x", pady=2)
+        
+        # Risk
+        risk_frame = ttk.LabelFrame(scrollable_frame, text="⚠️ Risk Management", padding=10)
+        risk_frame.pack(fill="x", pady=5, padx=5)
+        
+        ttk.Label(risk_frame, text="Take Profit (%):").pack(anchor="w")
+        self.take_profit_var = tk.DoubleVar(value=3.0)
+        ttk.Entry(risk_frame, textvariable=self.take_profit_var).pack(fill="x", pady=2)
+        
+        ttk.Label(risk_frame, text="Stop Loss - Regular Hours (%):").pack(anchor="w", pady=(10,0))
+        self.stop_loss_var = tk.DoubleVar(value=2.0)
+        ttk.Entry(risk_frame, textvariable=self.stop_loss_var).pack(fill="x", pady=2)
+        
+        ttk.Label(risk_frame, text="Stop Loss - Extended Hours (%):").pack(anchor="w", pady=(10,0))
+        self.extended_hours_stop_var = tk.DoubleVar(value=5.0)
+        ttk.Entry(risk_frame, textvariable=self.extended_hours_stop_var).pack(fill="x", pady=2)
+        ttk.Label(risk_frame, text="(Wider for low liquidity)", 
+                 font=("Arial", 8), foreground="gray").pack(anchor="w")
+        
+        self.use_trailing_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(risk_frame, text="Enable Trailing Stop",
+                       variable=self.use_trailing_var).pack(anchor="w", pady=(10,0))
+        
+        ttk.Label(risk_frame, text="Trailing Stop (%):").pack(anchor="w", pady=(5,0))
+        self.trailing_stop_var = tk.DoubleVar(value=1.0)
+        ttk.Entry(risk_frame, textvariable=self.trailing_stop_var).pack(fill="x", pady=2)
+        
+        ttk.Label(risk_frame, text="Max Daily Loss ($):").pack(anchor="w", pady=(10,0))
+        self.max_daily_loss_var = tk.DoubleVar(value=1000.0)
+        ttk.Entry(risk_frame, textvariable=self.max_daily_loss_var).pack(fill="x", pady=2)
+        
+        ttk.Label(risk_frame, text="Max Position Size ($):").pack(anchor="w", pady=(10,0))
+        self.max_position_size_var = tk.DoubleVar(value=5000.0)
+        ttk.Entry(risk_frame, textvariable=self.max_position_size_var).pack(fill="x", pady=2)
+        
+        # Save/Load Config buttons at bottom
+        config_btn_frame = ttk.LabelFrame(scrollable_frame, text="💾 Configuration", padding=10)
+        config_btn_frame.pack(fill="x", pady=10, padx=5)
+        
+        ttk.Button(config_btn_frame, text="💾 Save Configuration",
+                  command=self.save_config).pack(fill="x", pady=3)
+        ttk.Button(config_btn_frame, text="📂 Load Configuration",
+                  command=self.load_config).pack(fill="x", pady=3)
+        
+        # Status label for config operations
+        self.config_status_label = ttk.Label(config_btn_frame, text="",
+                                            font=("Arial", 8), foreground="green")
+        self.config_status_label.pack(pady=2)
+        
+        # Add some padding at bottom for scrolling
+        ttk.Frame(scrollable_frame, height=20).pack()
+    
+    def update_session_status(self):
+        """Update status label when sessions are toggled"""
+        enabled = []
+        if self.enable_premarket_var.get():
+            enabled.append("Pre")
+        if self.enable_intraday_var.get():
+            enabled.append("Intra")
+        if self.enable_aftermarket_var.get():
+            enabled.append("After")
+        
+        if enabled:
+            self.config_status_label.config(
+                text=f"Active: {', '.join(enabled)}",
+                foreground="green"
+            )
+        else:
+            self.config_status_label.config(
+                text="⚠️ No sessions enabled!",
+                foreground="red"
+            )
+    
+    def _create_display_panel(self, parent):
+        notebook = ttk.Notebook(parent)
+        notebook.pack(fill="both", expand=True)
+        
+        dashboard_tab = ttk.Frame(notebook)
+        notebook.add(dashboard_tab, text="📈 Dashboard")
+        self._create_dashboard(dashboard_tab)
+        
+        positions_tab = ttk.Frame(notebook)
+        notebook.add(positions_tab, text="💼 Positions")
+        self._create_positions_tab(positions_tab)
+        
+        analytics_tab = ttk.Frame(notebook)
+        notebook.add(analytics_tab, text="📊 Analytics")
+        self._create_analytics_tab(analytics_tab)
+        
+        logs_tab = ttk.Frame(notebook)
+        notebook.add(logs_tab, text="📝 Logs")
+        self._create_logs_tab(logs_tab)
+    
+    def _create_dashboard(self, parent):
+        # Control Buttons at the top
+        control_frame = ttk.LabelFrame(parent, text="🎮 Trading Controls", padding=15)
+        control_frame.pack(fill="x", padx=10, pady=10)
+        
+        # Main control button
+        self.start_button = ttk.Button(control_frame, text="🚀 START 24/7 AUTO-TRADING",
+                                       command=self.start_bot, style="Accent.TButton")
+        self.start_button.pack(fill="x", pady=5, ipady=10)
+        
+        # Secondary controls in a row
+        btn_row = ttk.Frame(control_frame)
+        btn_row.pack(fill="x", pady=5)
+        
+        ttk.Button(btn_row, text="🛑 STOP & LIQUIDATE",
+                  command=self.stop_bot).pack(side="left", expand=True, fill="x", padx=2)
+        ttk.Button(btn_row, text="🔄 Reset Daily",
+                  command=self.reset_daily).pack(side="left", expand=True, fill="x", padx=2)
+        ttk.Button(btn_row, text="💰 Liquidate Profitable",
+                  command=self.liquidate_profitable_only).pack(side="left", expand=True, fill="x", padx=2)
+        
+        # Session status
+        session_frame = ttk.LabelFrame(parent, text="📅 Session Status", padding=15)
+        session_frame.pack(fill="x", padx=10, pady=10)
+        
+        self.session_label = ttk.Label(session_frame, text="Current: 💤 IDLE",
+                                       font=("Arial", 14, "bold"), foreground="#666666")
+        self.session_label.pack()
+        
+        self.next_session_label = ttk.Label(session_frame, text="Ready to start 24/7 trading",
+                                           font=("Arial", 10), foreground="gray")
+        self.next_session_label.pack(pady=5)
+        
+        # Stats
+        stats_frame = ttk.LabelFrame(parent, text="📊 Live Stats", padding=15)
+        stats_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        ttk.Label(stats_frame, text="Buying Power:",
+                 font=("Arial", 10)).grid(row=0, column=0, sticky="w", pady=2)
+        self.buying_power_label = ttk.Label(stats_frame, text="$0.00",
+                                           font=("Arial", 10, "bold"))
+        self.buying_power_label.grid(row=0, column=1, sticky="e", pady=2)
+        
+        ttk.Label(stats_frame, text="Portfolio Value:",
+                 font=("Arial", 10)).grid(row=1, column=0, sticky="w", pady=2)
+        self.portfolio_value_label = ttk.Label(stats_frame, text="$0.00",
+                                              font=("Arial", 10, "bold"))
+        self.portfolio_value_label.grid(row=1, column=1, sticky="e", pady=2)
+        
+        ttk.Separator(stats_frame, orient="horizontal").grid(row=2, column=0,
+                                                            columnspan=2, sticky="ew", pady=10)
+        
+        ttk.Label(stats_frame, text="Daily P&L:",
+                 font=("Arial", 11)).grid(row=3, column=0, sticky="w", pady=2)
+        self.daily_pnl_label = ttk.Label(stats_frame, text="$0.00",
+                                        font=("Arial", 11, "bold"))
+        self.daily_pnl_label.grid(row=3, column=1, sticky="e", pady=2)
+        
+        ttk.Label(stats_frame, text="Total Trades:",
+                 font=("Arial", 10)).grid(row=4, column=0, sticky="w", pady=2)
+        self.total_trades_label = ttk.Label(stats_frame, text="0",
+                                           font=("Arial", 10, "bold"))
+        self.total_trades_label.grid(row=4, column=1, sticky="e", pady=2)
+        
+        ttk.Label(stats_frame, text="Win Rate:",
+                 font=("Arial", 10)).grid(row=5, column=0, sticky="w", pady=2)
+        self.win_rate_label = ttk.Label(stats_frame, text="0%",
+                                       font=("Arial", 10, "bold"))
+        self.win_rate_label.grid(row=5, column=1, sticky="e", pady=2)
+        
+        ttk.Label(stats_frame, text="Active Positions:",
+                 font=("Arial", 10)).grid(row=6, column=0, sticky="w", pady=2)
+        self.active_pos_label = ttk.Label(stats_frame, text="0 bot / 0 total",
+                                         font=("Arial", 10, "bold"))
+        self.active_pos_label.grid(row=6, column=1, sticky="e", pady=2)
+        
+        stats_frame.columnconfigure(1, weight=1)
+    
+    def _create_positions_tab(self, parent):
+        pos_frame = ttk.Frame(parent)
+        pos_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        columns = ('Symbol', 'Qty', 'Entry', 'Current', 'P&L $', 'P&L %', 'Session', 'Bot', 'Time')
+        self.positions_tree = ttk.Treeview(pos_frame, columns=columns, show='headings', height=25)
+        
+        # Make columns sortable
+        for col in columns:
+            self.positions_tree.heading(col, text=col,
+                                       command=lambda c=col: self.sort_positions(c))
+            width = 100 if col not in ['Session', 'Bot'] else 90
+            self.positions_tree.column(col, width=width, anchor='center')
+        
+        scrollbar = ttk.Scrollbar(pos_frame, orient="vertical",
+                                 command=self.positions_tree.yview)
+        self.positions_tree.configure(yscrollcommand=scrollbar.set)
+        
+        scrollbar.pack(side="right", fill="y")
+        self.positions_tree.pack(fill="both", expand=True)
+        
+        self.positions_tree.tag_configure('profit', foreground='#00aa00')
+        self.positions_tree.tag_configure('loss', foreground='#ff0000')
+        
+        btn_frame = ttk.Frame(parent)
+        btn_frame.pack(fill="x", padx=10, pady=5)
+        
+        ttk.Button(btn_frame, text="🔄 Refresh",
+                  command=self.update_positions).pack(side="left", padx=5)
+        ttk.Button(btn_frame, text="❌ Close Selected",
+                  command=self.close_selected_position).pack(side="left", padx=5)
+        
+        self.sort_column = None
+        self.sort_reverse = False
+    
+    def sort_positions(self, col, skip_toggle=False):
+        """Sort positions by column with persistent sorting"""
+        items = [(self.positions_tree.set(item, col), item) 
+                for item in self.positions_tree.get_children('')]
+        
+        # Toggle sort direction only if not skipping
+        if not skip_toggle:
+            if self.sort_column == col:
+                self.sort_reverse = not self.sort_reverse
+            else:
+                self.sort_reverse = False
+            self.sort_column = col
+        
+        # Sort numerically for specific columns
+        if col in ['Qty', 'Entry', 'Current', 'P&L $', 'P&L %', 'Time']:
+            try:
+                items.sort(key=lambda x: float(x[0].replace('$', '').replace('%', '').replace('m', '').replace('+', '')),
+                          reverse=self.sort_reverse)
+            except:
+                items.sort(reverse=self.sort_reverse)
+        else:
+            items.sort(reverse=self.sort_reverse)
+        
+        # Rearrange items in tree
+        for index, (val, item) in enumerate(items):
+            self.positions_tree.move(item, '', index)
+    
+    def _create_analytics_tab(self, parent):
+        analytics_frame = ttk.LabelFrame(parent, text="📊 Session Performance", padding=15)
+        analytics_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        # Session stats grid
+        ttk.Label(analytics_frame, text="Session", font=("Arial", 10, "bold")).grid(
+            row=0, column=0, padx=10, pady=5)
+        ttk.Label(analytics_frame, text="Trades", font=("Arial", 10, "bold")).grid(
+            row=0, column=1, padx=10, pady=5)
+        ttk.Label(analytics_frame, text="P&L", font=("Arial", 10, "bold")).grid(
+            row=0, column=2, padx=10, pady=5)
+        ttk.Label(analytics_frame, text="Win Rate", font=("Arial", 10, "bold")).grid(
+            row=0, column=3, padx=10, pady=5)
+        
+        # Pre-market
+        ttk.Label(analytics_frame, text="🌅 Pre-Market", font=("Arial", 10)).grid(
+            row=1, column=0, sticky="w", padx=10, pady=5)
+        self.pm_trades_label = ttk.Label(analytics_frame, text="0")
+        self.pm_trades_label.grid(row=1, column=1, padx=10, pady=5)
+        self.pm_pnl_label = ttk.Label(analytics_frame, text="$0.00")
+        self.pm_pnl_label.grid(row=1, column=2, padx=10, pady=5)
+        self.pm_wr_label = ttk.Label(analytics_frame, text="0%")
+        self.pm_wr_label.grid(row=1, column=3, padx=10, pady=5)
+        
+        # Intraday
+        ttk.Label(analytics_frame, text="☀️ Intraday", font=("Arial", 10)).grid(
+            row=2, column=0, sticky="w", padx=10, pady=5)
+        self.id_trades_label = ttk.Label(analytics_frame, text="0")
+        self.id_trades_label.grid(row=2, column=1, padx=10, pady=5)
+        self.id_pnl_label = ttk.Label(analytics_frame, text="$0.00")
+        self.id_pnl_label.grid(row=2, column=2, padx=10, pady=5)
+        self.id_wr_label = ttk.Label(analytics_frame, text="0%")
+        self.id_wr_label.grid(row=2, column=3, padx=10, pady=5)
+        
+        # After-market
+        ttk.Label(analytics_frame, text="🌙 After-Market", font=("Arial", 10)).grid(
+            row=3, column=0, sticky="w", padx=10, pady=5)
+        self.am_trades_label = ttk.Label(analytics_frame, text="0")
+        self.am_trades_label.grid(row=3, column=1, padx=10, pady=5)
+        self.am_pnl_label = ttk.Label(analytics_frame, text="$0.00")
+        self.am_pnl_label.grid(row=3, column=2, padx=10, pady=5)
+        self.am_wr_label = ttk.Label(analytics_frame, text="0%")
+        self.am_wr_label.grid(row=3, column=3, padx=10, pady=5)
+    
+    def _create_logs_tab(self, parent):
+        log_frame = ttk.Frame(parent)
+        log_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        self.log_text = scrolledtext.ScrolledText(
+            log_frame, wrap=tk.WORD, state="disabled",
+            bg="#1e1e1e", fg="#00ff00", font=("Consolas", 9)
+        )
+        self.log_text.pack(fill="both", expand=True)
+    
+    def get_current_config(self):
+        return {
+            'enable_premarket': self.enable_premarket_var.get(),
+            'enable_intraday': self.enable_intraday_var.get(),
+            'enable_aftermarket': self.enable_aftermarket_var.get(),
+            'premarket_max_positions': self.premarket_max_var.get(),
+            'intraday_max_positions': self.intraday_max_var.get(),
+            'aftermarket_max_positions': self.aftermarket_max_var.get(),
+            'max_spend_per_stock': self.max_spend_var.get(),
+            'min_price': self.min_price_var.get(),
+            'min_volume': self.min_volume_var.get(),
+            'max_daily_loss': self.max_daily_loss_var.get(),
+            'max_position_size': self.max_position_size_var.get(),
+            'take_profit_pct': self.take_profit_var.get(),
+            'stop_loss_pct': self.stop_loss_var.get(),
+            'extended_hours_stop_loss': self.extended_hours_stop_var.get(),
+            'use_trailing_stop': self.use_trailing_var.get(),
+            'trailing_stop_pct': self.trailing_stop_var.get(),
+            'min_confidence': self.min_confidence_var.get(),
+            'time_between_trades': self.time_between_var.get()
+        }
+    
+    def save_config(self):
+        try:
+            with open(self.config_file, 'w') as f:
+                json.dump(self.get_current_config(), f, indent=4)
+            self.config_status_label.config(text="✅ Saved!", foreground="green")
+            messagebox.showinfo("Success", "Configuration saved successfully!")
+            
+            # Clear status after 3 seconds
+            self.root.after(3000, lambda: self.config_status_label.config(text=""))
+        except Exception as e:
+            self.config_status_label.config(text="❌ Save failed!", foreground="red")
+            messagebox.showerror("Error", f"Failed to save: {e}")
+    
+    def load_config(self):
+        try:
+            if os.path.exists(self.config_file):
+                with open(self.config_file, 'r') as f:
+                    config = json.load(f)
+                
+                self.enable_premarket_var.set(config.get('enable_premarket', True))
+                self.enable_intraday_var.set(config.get('enable_intraday', True))
+                self.enable_aftermarket_var.set(config.get('enable_aftermarket', True))
+                self.premarket_max_var.set(config.get('premarket_max_positions', 4))
+                self.intraday_max_var.set(config.get('intraday_max_positions', 10))
+                self.aftermarket_max_var.set(config.get('aftermarket_max_positions', 5))
+                self.max_spend_var.set(config.get('max_spend_per_stock', 500.0))
+                self.min_price_var.set(config.get('min_price', 1.0))
+                self.min_volume_var.set(config.get('min_volume', 100000))
+                self.max_daily_loss_var.set(config.get('max_daily_loss', 1000.0))
+                self.max_position_size_var.set(config.get('max_position_size', 5000.0))
+                self.take_profit_var.set(config.get('take_profit_pct', 3.0))
+                self.stop_loss_var.set(config.get('stop_loss_pct', 2.0))
+                self.extended_hours_stop_var.set(config.get('extended_hours_stop_loss', 5.0))
+                self.use_trailing_var.set(config.get('use_trailing_stop', False))
+                self.trailing_stop_var.set(config.get('trailing_stop_pct', 1.0))
+                self.min_confidence_var.set(config.get('min_confidence', 65))
+                self.time_between_var.set(config.get('time_between_trades', 5))
+                
+                self.update_session_status()
+                self.config_status_label.config(text="✅ Loaded!", foreground="green")
+                messagebox.showinfo("Success", "Configuration loaded successfully!")
+                
+                # Clear status after 3 seconds
+                self.root.after(3000, lambda: self.config_status_label.config(text=""))
+        except Exception as e:
+            self.config_status_label.config(text="❌ Load failed!", foreground="red")
+            self.log_queue.put(f"Config error: {e}")
+    
+    def process_log_queue(self):
+        while not self.log_queue.empty():
+            msg = self.log_queue.get_nowait()
+            self.log_text.config(state="normal")
+            timestamp = datetime.now().strftime('%H:%M:%S')
+            self.log_text.insert(tk.END, f"[{timestamp}] {msg}\n")
+            self.log_text.config(state="disabled")
+            self.log_text.see(tk.END)
+        
+        self.root.after(100, self.process_log_queue)
+    
+    def start_bot(self):
+        if self.bot_thread and self.bot_thread.is_alive():
+            messagebox.showwarning("Warning", "Bot already running!")
+            return
+        
+        # Check if at least one session is enabled
+        if not (self.enable_premarket_var.get() or self.enable_intraday_var.get() or self.enable_aftermarket_var.get()):
+            messagebox.showerror("Error", "Enable at least one trading session!")
+            return
+        
+        self.stop_event.clear()
+        self.active_bot = EnhancedTradingBot(self.get_current_config(), self.log_queue)
+        
+        self.bot_thread = threading.Thread(target=self.run_full_day_loop, daemon=True)
+        self.bot_thread.start()
+        
+        # Update button states
+        self.start_button.config(state="disabled", text="✅ BOT RUNNING")
+        
+        # Build message about enabled sessions
+        enabled_sessions = []
+        if self.enable_premarket_var.get():
+            enabled_sessions.append(f"Pre-Market: {self.premarket_max_var.get()} trades")
+        if self.enable_intraday_var.get():
+            enabled_sessions.append(f"Intraday: {self.intraday_max_var.get()} trades")
+        if self.enable_aftermarket_var.get():
+            enabled_sessions.append(f"After-Market: {self.aftermarket_max_var.get()} trades")
+        
+        # Check if it's weekend
+        eastern = pytz.timezone('US/Eastern')
+        now = datetime.now(eastern)
+        is_weekend = now.weekday() >= 5
+        
+        if is_weekend:
+            day_name = "Saturday" if now.weekday() == 5 else "Sunday"
+            messagebox.showinfo("Started",
+                f"Bot Started!\n\n"
+                f"⚠️ Today is {day_name} - Markets are CLOSED\n\n"
+                f"Bot will wake Monday at 6:30 AM EST\n\n"
+                f"Enabled Sessions:\n• " + "\n• ".join(enabled_sessions))
+        else:
+            messagebox.showinfo("Started",
+                "Weekday Trading Activated!\n\n"
+                f"Enabled Sessions:\n• " + "\n• ".join(enabled_sessions) + "\n\n"
+                "📅 Monday-Friday: 6:30 AM - 8:00 PM EST\n"
+                "💤 Weekends: Automatic sleep mode")
+    
+    def liquidate_profitable_only(self):
+        """Liquidate only profitable positions"""
+        if not self.active_bot:
+            messagebox.showerror("Error", "Bot not running")
+            return
+        
+        if not messagebox.askyesno("Confirm", 
+            "Close only PROFITABLE positions?\n\n"
+            "Losing positions will be kept."):
+            return
+        
+        threading.Thread(target=self.active_bot.liquidate_profitable_positions,
+                        daemon=True).start()
+        self.log_queue.put("📊 Manual profitable liquidation requested")
+    
+    def run_full_day_loop(self):
+        """Full day trading loop with session switching - WEEKDAYS ONLY"""
+        eastern = pytz.timezone('US/Eastern')
+        
+        # Session times
+        premarket_start = datetime.strptime("06:30", "%H:%M").time()
+        market_open = datetime.strptime("09:30", "%H:%M").time()
+        preclose_time = datetime.strptime("15:50", "%H:%M").time()
+        market_close = datetime.strptime("16:00", "%H:%M").time()
+        aftermarket_start = datetime.strptime("16:01", "%H:%M").time()
+        aftermarket_end = datetime.strptime("20:00", "%H:%M").time()
+        
+        self.log_queue.put("🚀🚀🚀 24/7 AUTO-TRADING STARTED 🚀🚀🚀")
+        self.log_queue.put("📅 Trading MONDAY-FRIDAY only (6:30 AM - 8:00 PM EST)")
+        self.log_queue.put("💤 Bot will sleep on weekends")
+        
+        weekend_logged = False
+        
+        while not self.stop_event.is_set():
+            try:
+                now = datetime.now(eastern)
+                current_time = now.time()
+                current_weekday = now.weekday()  # 0=Monday, 6=Sunday
+                
+                # CHECK IF WEEKEND (Saturday=5, Sunday=6)
+                if current_weekday >= 5:  # Saturday or Sunday
+                    if self.active_bot.current_session != TradingSession.CLOSED or not weekend_logged:
+                        self.active_bot.current_session = TradingSession.CLOSED
+                        
+                        day_name = "Saturday" if current_weekday == 5 else "Sunday"
+                        self.log_queue.put(f"💤 {day_name} - Markets Closed")
+                        self.log_queue.put("📅 Next trading: Monday 6:30 AM EST")
+                        
+                        self.session_label.config(text=f"Current: 💤 WEEKEND ({day_name})",
+                                                 foreground="#666666")
+                        self.next_session_label.config(text="Next: Monday 6:30 AM Pre-Market")
+                        weekend_logged = True
+                    
+                    # Sleep longer on weekends (check every 30 minutes)
+                    time.sleep(1800)
+                    continue
+                
+                # RESET WEEKEND FLAG on weekdays
+                if current_weekday < 5:
+                    weekend_logged = False
+                
+                # WEEKDAY TRADING (Monday-Friday)
+                if premarket_start <= current_time < market_open:
+                    # PRE-MARKET
+                    if self.active_bot.current_session != TradingSession.PREMARKET:
+                        self.active_bot.current_session = TradingSession.PREMARKET
+                        
+                        if self.active_bot.is_session_enabled():
+                            self.log_queue.put("🌅 === PREMARKET SESSION ACTIVE ===")
+                            self.session_label.config(text="Current: 🌅 PRE-MARKET",
+                                                     foreground="#ff6600")
+                        else:
+                            self.log_queue.put("💤 Pre-Market DISABLED - Monitoring only")
+                            self.session_label.config(text="Current: 💤 PRE-MARKET (Disabled)",
+                                                     foreground="#999999")
+                        
+                        self.next_session_label.config(text="Next: 9:30 AM Intraday")
+                    
+                    self.active_bot.monitor_positions()
+                    if self.active_bot.is_session_enabled():
+                        self.active_bot.scan_and_execute()
+                    time.sleep(30)
+                
+                elif market_open <= current_time < market_close:
+                    # INTRADAY
+                    if self.active_bot.current_session != TradingSession.INTRADAY:
+                        self.active_bot.current_session = TradingSession.INTRADAY
+                        
+                        if self.active_bot.is_session_enabled():
+                            self.log_queue.put("☀️ === INTRADAY SESSION ACTIVE ===")
+                            self.session_label.config(text="Current: ☀️ INTRADAY",
+                                                     foreground="#00aa00")
+                        else:
+                            self.log_queue.put("💤 Intraday DISABLED - Monitoring only")
+                            self.session_label.config(text="Current: 💤 INTRADAY (Disabled)",
+                                                     foreground="#999999")
+                        
+                        self.next_session_label.config(text="Next: 4:00 PM After-Market")
+                    
+                    self.active_bot.monitor_positions()
+                    
+                    if current_time >= preclose_time:
+                        self.active_bot.liquidate_profitable_positions()
+                    elif self.active_bot.is_session_enabled():
+                        self.active_bot.scan_and_execute()
+                    
+                    time.sleep(30)
+                
+                elif aftermarket_start <= current_time < aftermarket_end:
+                    # AFTER-MARKET
+                    if self.active_bot.current_session != TradingSession.AFTERMARKET:
+                        self.active_bot.current_session = TradingSession.AFTERMARKET
+                        
+                        if self.active_bot.is_session_enabled():
+                            self.log_queue.put("🌙 === AFTERMARKET SESSION ACTIVE ===")
+                            self.session_label.config(text="Current: 🌙 AFTER-MARKET",
+                                                     foreground="#6666ff")
+                        else:
+                            self.log_queue.put("💤 After-Market DISABLED - Monitoring only")
+                            self.session_label.config(text="Current: 💤 AFTER-MARKET (Disabled)",
+                                                     foreground="#999999")
+                        
+                        self.next_session_label.config(text="Next: 6:30 AM Pre-Market (Tomorrow)")
+                    
+                    self.active_bot.monitor_positions()
+                    if self.active_bot.is_session_enabled():
+                        self.active_bot.scan_and_execute()
+                    time.sleep(30)
+                
+                else:
+                    # CLOSED (weekday after hours)
+                    if self.active_bot.current_session != TradingSession.CLOSED:
+                        self.active_bot.current_session = TradingSession.CLOSED
+                        
+                        # Check if it's Friday evening
+                        if current_weekday == 4 and current_time > aftermarket_end:  # Friday after 8 PM
+                            self.log_queue.put("💤 Friday evening. Next: Monday 6:30 AM EST")
+                            self.next_session_label.config(text="Next: Monday 6:30 AM Pre-Market")
+                        else:
+                            self.log_queue.put("💤 After hours. Next: 6:30 AM EST")
+                            self.next_session_label.config(text="Next: 6:30 AM Pre-Market")
+                        
+                        self.session_label.config(text="Current: 💤 CLOSED",
+                                                 foreground="#666666")
+                    
+                    time.sleep(300)
+            
+            except Exception as e:
+                self.log_queue.put(f"🔥 Loop error: {e}")
+                time.sleep(10)
+        
+        self.log_queue.put("🛑 Trading stopped")
+        
+        try:
+            self.start_button.config(state="normal", text="🚀 START 24/7 AUTO-TRADING")
+            self.session_label.config(text="Current: 💤 STOPPED", foreground="#ff0000")
+            self.next_session_label.config(text="Click START to resume trading")
+        except:
+            pass
+    
+    def stop_bot(self):
+        if not self.bot_thread or not self.bot_thread.is_alive():
+            messagebox.showinfo("Info", "Bot not running")
+            return
+        
+        bot_positions = len(self.active_bot.active_positions) if self.active_bot else 0
+        
+        msg = f"Stop bot and liquidate {bot_positions} bot position(s)?\n\n"
+        msg += "Manual positions will NOT be affected."
+        
+        if messagebox.askyesno("Confirm", msg):
+            self.stop_event.set()
+            if self.active_bot and bot_positions > 0:
+                threading.Thread(target=self.active_bot.liquidate_all_positions,
+                               daemon=True).start()
+            
+            # Re-enable start button
+            self.start_button.config(state="normal", text="🚀 START 24/7 AUTO-TRADING")
+            self.session_label.config(text="Current: 💤 STOPPED", foreground="#ff0000")
+    
+    def reset_daily(self):
+        if self.active_bot:
+            self.active_bot.reset_daily_metrics()
+            messagebox.showinfo("Success", "Daily reset complete")
+    
+    def update_stats(self):
+        # Update window title with day
+        self._update_window_title()
+        
+        try:
+            if self.active_bot:
+                try:
+                    account = self.active_bot.api.get_account()
+                    self.buying_power_label.config(
+                        text=f"${float(account.buying_power):,.2f}"
+                    )
+                    self.portfolio_value_label.config(
+                        text=f"${float(account.portfolio_value):,.2f}"
+                    )
+                except:
+                    pass
+                
+                perf = self.active_bot.performance
+                pnl = perf.daily_pnl
+                
+                self.daily_pnl_label.config(
+                    text=f"${pnl:+,.2f}",
+                    foreground="#00aa00" if pnl >= 0 else "#ff0000"
+                )
+                
+                total_trades = perf.winning_trades + perf.losing_trades
+                self.total_trades_label.config(text=str(total_trades))
+                self.win_rate_label.config(text=f"{perf.get_win_rate():.1f}%")
+                
+                bot_pos = len(self.active_bot.active_positions)
+                try:
+                    total_pos = len(self.active_bot.api.list_positions())
+                except:
+                    total_pos = bot_pos
+                
+                self.active_pos_label.config(text=f"{bot_pos} bot / {total_pos} total")
+                
+                # Update session stats
+                pm_stats = perf.get_session_stats(TradingSession.PREMARKET)
+                id_stats = perf.get_session_stats(TradingSession.INTRADAY)
+                am_stats = perf.get_session_stats(TradingSession.AFTERMARKET)
+                
+                self.pm_trades_label.config(text=str(pm_stats['trades']))
+                self.pm_pnl_label.config(text=f"${pm_stats['pnl']:+.2f}",
+                    foreground="#00aa00" if pm_stats['pnl'] >= 0 else "#ff0000")
+                self.pm_wr_label.config(text=f"{pm_stats['win_rate']:.1f}%")
+                
+                self.id_trades_label.config(text=str(id_stats['trades']))
+                self.id_pnl_label.config(text=f"${id_stats['pnl']:+.2f}",
+                    foreground="#00aa00" if id_stats['pnl'] >= 0 else "#ff0000")
+                self.id_wr_label.config(text=f"{id_stats['win_rate']:.1f}%")
+                
+                self.am_trades_label.config(text=str(am_stats['trades']))
+                self.am_pnl_label.config(text=f"${am_stats['pnl']:+.2f}",
+                    foreground="#00aa00" if am_stats['pnl'] >= 0 else "#ff0000")
+                self.am_wr_label.config(text=f"{am_stats['win_rate']:.1f}%")
+        except:
+            pass
+        
+        self.update_positions()
+        
+        if self.bot_thread and self.bot_thread.is_alive():
+            self.root.after(5000, self.update_stats)
+        else:
+            self.root.after(30000, self.update_stats)
+    
+    def update_positions(self):
+        # Store current sort settings
+        current_sort_col = getattr(self, 'sort_column', None)
+        current_sort_reverse = getattr(self, 'sort_reverse', False)
+        
+        # Clear tree
+        for item in self.positions_tree.get_children():
+            self.positions_tree.delete(item)
+        
+        if not self.active_bot:
+            return
+        
+        try:
+            all_positions = self.active_bot.api.list_positions()
+            bot_managed = self.active_bot.get_bot_managed_symbols()
+            
+            position_data = []
+            
+            for p in all_positions:
+                try:
+                    pnl = (float(p.current_price) - float(p.avg_entry_price)) * int(p.qty)
+                    pnl_pct = ((float(p.current_price) - float(p.avg_entry_price)) / float(p.avg_entry_price)) * 100
+                    
+                    is_bot = "✅" if p.symbol in bot_managed else "❌"
+                    
+                    session = "-"
+                    time_str = "-"
+                    if p.symbol in bot_managed and p.symbol in self.active_bot.active_positions:
+                        pos_data = self.active_bot.active_positions[p.symbol]
+                        session = pos_data['session'].upper()[:3]
+                        time_in = datetime.now() - pos_data['entry_time']
+                        time_str = f"{int(time_in.total_seconds() // 60)}m"
+                    
+                    values = (
+                        p.symbol,
+                        p.qty,
+                        f"${float(p.avg_entry_price):.2f}",
+                        f"${float(p.current_price):.2f}",
+                        f"${pnl:+.2f}",
+                        f"{pnl_pct:+.2f}%",
+                        session,
+                        is_bot,
+                        time_str
+                    )
+                    
+                    tag = 'profit' if pnl >= 0 else 'loss'
+                    position_data.append((values, tag))
+                
+                except:
+                    continue
+            
+            # Insert all positions
+            for values, tag in position_data:
+                self.positions_tree.insert('', 'end', values=values, tags=(tag,))
+            
+            # Re-apply sort if there was one
+            if current_sort_col:
+                self.sort_column = current_sort_col
+                self.sort_reverse = current_sort_reverse
+                self.sort_positions(current_sort_col, skip_toggle=True)
+        except:
+            pass
+    
+    def close_selected_position(self):
+        if not self.active_bot:
+            messagebox.showerror("Error", "Bot not running")
+            return
+        
+        selected = self.positions_tree.selection()
+        if not selected:
+            messagebox.showwarning("Warning", "Select a position")
+            return
+        
+        values = self.positions_tree.item(selected[0])['values']
+        symbol = values[0]
+        is_bot = "✅" in values[7]
+        
+        if not messagebox.askyesno("Confirm", f"Close {symbol}?"):
+            return
+        
+        try:
+            if is_bot:
+                quote = self.active_bot.api.get_latest_quote(symbol)
+                current_price = quote.bp or quote.ap
+                if current_price:
+                    self.active_bot.exit_position(symbol, current_price, "Manual Close")
+            else:
+                self.active_bot.api.close_position(symbol)
+            
+            time.sleep(1)
+            self.update_positions()
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed: {e}")
+    
+    def on_closing(self):
+        if self.bot_thread and self.bot_thread.is_alive():
+            if messagebox.askyesno("Quit", "Bot is running. Stop and quit?"):
+                self.stop_event.set()
+                time.sleep(1)  # Give time for cleanup
+                self.root.destroy()
+        else:
+            self.root.destroy()
+
+# =============================================================================
+# MAIN
+# =============================================================================
+
+if __name__ == "__main__":
+    if "YOUR_API_KEY" in API_KEY:
+        print("=" * 70)
+        print("⚠️  Configure API credentials in api_config.json")
+        print("=" * 70)
+    
+    root = tk.Tk()
+    app = TradingBotApp(root)
+    root.mainloop()
