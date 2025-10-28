@@ -34,6 +34,35 @@ def strip_html_tags(html):
     text = text.strip()
     return text
 
+def extract_urls_from_html(html):
+    """Extract all URLs from HTML anchor tags and plain text"""
+    if not html:
+        return []
+    
+    urls = []
+    
+    # Extract from anchor tags <a href="...">
+    href_pattern = r'<a[^>]+href=["\'](https?://[^"\']+)["\']'
+    urls.extend(re.findall(href_pattern, html, re.IGNORECASE))
+    
+    # Also look for plain URLs in text (after stripping tags)
+    text = strip_html_tags(html)
+    url_pattern = r'(https?://[^\s]+)'
+    plain_urls = re.findall(url_pattern, text)
+    urls.extend(plain_urls)
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_urls = []
+    for url in urls:
+        # Clean up URL (remove trailing punctuation)
+        url = url.rstrip('.,;:)')
+        if url not in seen:
+            seen.add(url)
+            unique_urls.append(url)
+    
+    return unique_urls
+
 class JiraXMLExtractor:
     def __init__(self, root):
         self.root = root
@@ -156,30 +185,47 @@ class JiraXMLExtractor:
         if not description:
             return {}
         
+        # First, extract URLs before stripping HTML (for link fields)
+        link_urls = extract_urls_from_html(description)
+        
+        # Now strip HTML tags from the entire description for pattern matching
+        clean_description = strip_html_tags(description)
+        
         # Dictionary to store extracted fields
         fields = {}
         
-        # Common patterns in JIRA descriptions
+        # Common patterns in JIRA descriptions - matching after stripping HTML
         patterns = {
-            'Date of Request': r'Date of Request[:\s]+([^\n]+)',
-            'Name of Requestor': r'Name of Requestor[:\s]+([^\n]+)',
-            'Requestor\'s Email Address': r'Requestor[\']*s Email Address[:\s]+([^\n]+)',
-            'Business Segment / Corporate Function': r'Business Segment.*?[:\s]+([^\n]+)',
-            'Please select the type of output': r'Please select.*?output[:\s]+([^\n]+)',
-            'Name of Output': r'Name of Output[:\s]+([^\n]+)',
-            'What is the scope': r'What is the scope.*?[:\s]+([^\n]+)',
-            'What is the purpose': r'What is the purpose.*?[:\s]+([^\n]+)',
-            'Name of Data Owner': r'Name of Data Owner[:\s]+([^\n]+)',
-            'Link to Data Owner Approval': r'Link to Data Owner Approval.*?[:\s]+(https?://[^\s]+)',
+            'Date of Request': r'Date of Request\s*:?\s*([^\n]+)',
+            'Name of Requestor': r'Name of Requestor\s*:?\s*([^\n]+)',
+            'Requestor\'s Email Address': r'Requestor[\']*s?\s*Email Address\s*:?\s*([^\n]+)',
+            'Business Segment / Corporate Function': r'Business Segment\s*/?\s*Corporate Function\s*:?\s*([^\n]+)',
+            'Please select the type of output': r'Please select[^:]*type of output\s*:?\s*([^\n]+)',
+            'Name of Output': r'Name of Output\s*:?\s*([^\n]+)',
+            'What is the scope': r'What is the scope[^:]*:?\s*([^\n]+)',
+            'What is the purpose': r'What is the purpose[^:]*:?\s*([^\n]+)',
+            'Name of Data Owner': r'Name of Data Owner\s*:?\s*([^\n]+)',
+            'Link to Data Owner Approval': None,  # Special handling for URLs
         }
         
         for field_name, pattern in patterns.items():
-            match = re.search(pattern, description, re.IGNORECASE)
-            if match:
-                # Extract value and strip HTML/XML tags
-                raw_value = match.group(1).strip()
-                clean_value = strip_html_tags(raw_value)
-                fields[field_name] = clean_value
+            if field_name == 'Link to Data Owner Approval':
+                # Special handling: use extracted URLs
+                if link_urls:
+                    # Join multiple URLs with line breaks for Excel
+                    fields[field_name] = '\n'.join(link_urls)
+                else:
+                    fields[field_name] = ""
+            elif pattern:
+                match = re.search(pattern, clean_description, re.IGNORECASE)
+                if match:
+                    # Extract value and clean it
+                    raw_value = match.group(1).strip()
+                    # Remove any remaining special characters or extra whitespace
+                    clean_value = re.sub(r'\s+', ' ', raw_value).strip()
+                    fields[field_name] = clean_value
+                else:
+                    fields[field_name] = ""
             else:
                 fields[field_name] = ""
         
@@ -361,6 +407,49 @@ class JiraXMLExtractor:
                     # Main data sheet
                     df_export.to_excel(writer, sheet_name='Extracted Data', index=False)
                     
+                    # Get the worksheet to apply formatting
+                    worksheet = writer.sheets['Extracted Data']
+                    
+                    # Find the column index for "Link to Data Owner Approval"
+                    link_col_idx = None
+                    if 'Link to Data Owner Approval' in selected_columns:
+                        link_col_idx = selected_columns.index('Link to Data Owner Approval') + 1  # +1 for Excel 1-based indexing
+                    
+                    # Auto-adjust column widths and apply text wrapping
+                    for idx, column in enumerate(worksheet.columns, 1):
+                        max_length = 0
+                        column_letter = column[0].column_letter
+                        
+                        # Apply text wrapping to all cells
+                        for cell in column:
+                            try:
+                                # Enable text wrapping for cells with newlines
+                                if cell.value and '\n' in str(cell.value):
+                                    cell.alignment = cell.alignment.copy(wrapText=True)
+                                
+                                # Calculate max length
+                                if cell.value:
+                                    # For cells with line breaks, use the longest line
+                                    if '\n' in str(cell.value):
+                                        lines = str(cell.value).split('\n')
+                                        cell_length = max(len(line) for line in lines)
+                                    else:
+                                        cell_length = len(str(cell.value))
+                                    
+                                    if cell_length > max_length:
+                                        max_length = cell_length
+                            except:
+                                pass
+                        
+                        # Set column width (with special handling for link columns)
+                        if idx == link_col_idx:
+                            # Make link columns wider
+                            adjusted_width = min(max_length + 2, 80)
+                        else:
+                            adjusted_width = min(max_length + 2, 50)
+                        
+                        worksheet.column_dimensions[column_letter].width = adjusted_width
+                    
                     # Summary sheet
                     summary_data = {
                         'Metric': ['Total Records', 'Total Files', 'Columns Exported', 'Export Date'],
@@ -369,24 +458,22 @@ class JiraXMLExtractor:
                                 len(selected_columns),
                                 datetime.now().strftime('%Y-%m-%d %H:%M:%S')]
                     }
-                    pd.DataFrame(summary_data).to_excel(
-                        writer, sheet_name='Summary', index=False
-                    )
+                    summary_df = pd.DataFrame(summary_data)
+                    summary_df.to_excel(writer, sheet_name='Summary', index=False)
                     
-                    # Auto-adjust column widths
-                    for sheet_name in writer.sheets:
-                        worksheet = writer.sheets[sheet_name]
-                        for column in worksheet.columns:
-                            max_length = 0
-                            column_letter = column[0].column_letter
-                            for cell in column:
-                                try:
-                                    if len(str(cell.value)) > max_length:
-                                        max_length = len(str(cell.value))
-                                except:
-                                    pass
-                            adjusted_width = min(max_length + 2, 50)
-                            worksheet.column_dimensions[column_letter].width = adjusted_width
+                    # Format summary sheet
+                    summary_ws = writer.sheets['Summary']
+                    for column in summary_ws.columns:
+                        max_length = 0
+                        column_letter = column[0].column_letter
+                        for cell in column:
+                            try:
+                                if len(str(cell.value)) > max_length:
+                                    max_length = len(str(cell.value))
+                            except:
+                                pass
+                        adjusted_width = min(max_length + 2, 50)
+                        summary_ws.column_dimensions[column_letter].width = adjusted_width
                 
                 messagebox.showinfo("Success", 
                                   f"Data exported successfully to:\n{filename}\n\nColumns exported: {len(selected_columns)}")
