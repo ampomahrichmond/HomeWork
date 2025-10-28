@@ -1,57 +1,102 @@
 import requests
-from requests.exceptions import RequestException
+from bs4 import BeautifulSoup
+from requests.auth import HTTPBasicAuth
+import json
 
-# IMPORTANT: JIRA instances almost always require authentication (API token or basic auth)
-# and a proper User-Agent header. Without credentials, you will likely receive a 
-# 401 (Unauthorized) or 302 (Redirect to Login) status code.
+# Configuration
+JIRA_STORY_URL = "https://track.md.com/browse/SDMOJ-11004"
+JIRA_USER = "your.email@company.com"
+JIRA_PASSWORD = "your_password"  # Your actual JIRA password (not API token)
 
-# Replace this with your actual JIRA URL
-JIRA_STORY_URL = "https://track.md.com/browser/SDMOJ-11004"
+PROXIES = None  # Configure if needed
 
-# Define a simple User-Agent header to mimic a standard browser, which helps avoid
-# automatic bot blocking from some servers.
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-}
-
-def test_connection(url):
-    """
-    Attempts to connect to the given URL and prints the result and status code.
-    """
-    print(f"Attempting to connect to: {url}")
+def scrape_jira_story(url):
+    """Scrape JIRA story details from the HTML page"""
+    
+    print(f"Scraping: {url}")
+    
+    # Create a session to maintain cookies
+    session = requests.Session()
+    
+    # Set headers to mimic a real browser
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+    }
     
     try:
-        # Use a timeout (10 seconds) to prevent the script from hanging indefinitely
-        response = requests.get(url, headers=HEADERS, timeout=10)
+        # First, try without authentication (if page is public)
+        response = session.get(url, headers=headers, proxies=PROXIES, timeout=10)
         
-        # Raise an exception for bad status codes (4xx or 5xx). This makes error handling cleaner.
-        response.raise_for_status() 
+        # If redirected to login, you'll need to authenticate
+        if 'login' in response.url.lower() or response.status_code == 401:
+            print("Authentication required...")
+            # Use basic auth
+            auth = HTTPBasicAuth(JIRA_USER, JIRA_PASSWORD)
+            response = session.get(url, headers=headers, auth=auth, proxies=PROXIES, timeout=10)
         
-        # If the request was successful (status code 200-299)
-        print("\n--- Connection Status: SUCCESS ---")
-        print(f"Status Code: {response.status_code}")
-        print("The server responded with content. You can likely proceed to scraping.")
+        response.raise_for_status()
         
-    except requests.exceptions.ConnectionError:
-        print("\n--- Connection Status: FAILED ---")
-        print("Error: Could not connect to the server (DNS error, refused connection, etc.).")
-    
-    except requests.exceptions.Timeout:
-        print("\n--- Connection Status: FAILED ---")
-        print("Error: Request timed out. The server took too long to respond.")
+        # Parse the HTML
+        soup = BeautifulSoup(response.content, 'html.parser')
         
-    except requests.exceptions.HTTPError as e:
-        # Handle 4xx client errors (like 401, 403, 404) or 5xx server errors
-        print("\n--- Connection Status: FAILED (Server responded with error code) ---")
-        print(f"Status Code: {e.response.status_code}")
-        if e.response.status_code in [401, 403]:
-             print("Reason: Unauthorized or Forbidden. This is common for JIRA. The connection works, but you need to include authentication (e.g., API token or basic auth) to access the page content.")
-        else:
-             print(f"Error: Received a generic bad status code ({e.response.status_code}).")
-
+        # Extract data (selectors may vary by JIRA version)
+        story_data = {}
+        
+        # Issue Key
+        issue_key = soup.find('a', {'id': 'key-val'})
+        story_data['key'] = issue_key.text.strip() if issue_key else None
+        
+        # Summary/Title
+        summary = soup.find('h1', {'id': 'summary-val'})
+        story_data['summary'] = summary.text.strip() if summary else None
+        
+        # Description
+        description = soup.find('div', {'id': 'description-val'})
+        story_data['description'] = description.get_text(strip=True) if description else None
+        
+        # Status
+        status = soup.find('span', {'id': 'status-val'})
+        story_data['status'] = status.text.strip() if status else None
+        
+        # Assignee
+        assignee = soup.find('span', {'id': 'assignee-val'})
+        story_data['assignee'] = assignee.get_text(strip=True) if assignee else None
+        
+        # Reporter
+        reporter = soup.find('span', {'id': 'reporter-val'})
+        story_data['reporter'] = reporter.get_text(strip=True) if reporter else None
+        
+        # Priority
+        priority = soup.find('span', {'id': 'priority-val'})
+        story_data['priority'] = priority.text.strip() if priority else None
+        
+        # Custom fields (adjust based on your JIRA)
+        custom_fields = soup.find_all('div', {'class': 'field-group'})
+        for field in custom_fields:
+            label = field.find('strong')
+            value = field.find('div', {'class': 'value'})
+            if label and value:
+                story_data[label.text.strip()] = value.get_text(strip=True)
+        
+        # Print extracted data
+        print("\n=== Extracted Data ===")
+        for key, value in story_data.items():
+            print(f"{key}: {value}")
+        
+        # Save to JSON
+        filename = f"{story_data.get('key', 'jira_story')}.json"
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(story_data, f, indent=2, ensure_ascii=False)
+        
+        print(f"\n✓ Saved to: {filename}")
+        
+        return story_data
+        
     except requests.exceptions.RequestException as e:
-        # Catch all other requests-related exceptions
-        print(f"\nAn unexpected error occurred: {e}")
+        print(f"✗ Error: {e}")
+        return None
 
 if __name__ == "__main__":
-    test_connection(JIRA_STORY_URL)
+    scrape_jira_story(JIRA_STORY_URL)
