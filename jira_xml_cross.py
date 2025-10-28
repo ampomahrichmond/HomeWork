@@ -5,6 +5,34 @@ import pandas as pd
 from datetime import datetime
 import re
 import os
+from html.parser import HTMLParser
+
+class MLStripper(HTMLParser):
+    """Helper class to strip HTML tags"""
+    def __init__(self):
+        super().__init__()
+        self.reset()
+        self.strict = False
+        self.convert_charrefs = True
+        self.text = []
+    
+    def handle_data(self, d):
+        self.text.append(d)
+    
+    def get_data(self):
+        return ''.join(self.text)
+
+def strip_html_tags(html):
+    """Remove HTML/XML tags from text"""
+    if not html:
+        return ""
+    s = MLStripper()
+    s.feed(html)
+    text = s.get_data()
+    # Also remove common XML entities and extra whitespace
+    text = re.sub(r'\s+', ' ', text)  # Replace multiple spaces with single space
+    text = text.strip()
+    return text
 
 class JiraXMLExtractor:
     def __init__(self, root):
@@ -148,7 +176,10 @@ class JiraXMLExtractor:
         for field_name, pattern in patterns.items():
             match = re.search(pattern, description, re.IGNORECASE)
             if match:
-                fields[field_name] = match.group(1).strip()
+                # Extract value and strip HTML/XML tags
+                raw_value = match.group(1).strip()
+                clean_value = strip_html_tags(raw_value)
+                fields[field_name] = clean_value
             else:
                 fields[field_name] = ""
         
@@ -305,6 +336,12 @@ class JiraXMLExtractor:
                                   "Please extract data first!")
             return
         
+        # Show column selection dialog
+        selected_columns = self.show_column_selector()
+        
+        if not selected_columns:
+            return  # User cancelled
+        
         # Ask for filename
         filename = filedialog.asksaveasfilename(
             defaultextension=".xlsx",
@@ -316,16 +353,20 @@ class JiraXMLExtractor:
             try:
                 df = pd.DataFrame(self.extracted_data)
                 
+                # Filter to selected columns only
+                df_export = df[selected_columns]
+                
                 # Create Excel writer
                 with pd.ExcelWriter(filename, engine='openpyxl') as writer:
                     # Main data sheet
-                    df.to_excel(writer, sheet_name='Extracted Data', index=False)
+                    df_export.to_excel(writer, sheet_name='Extracted Data', index=False)
                     
                     # Summary sheet
                     summary_data = {
-                        'Metric': ['Total Records', 'Total Files', 'Export Date'],
+                        'Metric': ['Total Records', 'Total Files', 'Columns Exported', 'Export Date'],
                         'Value': [len(self.extracted_data), 
                                 len(self.xml_files),
+                                len(selected_columns),
                                 datetime.now().strftime('%Y-%m-%d %H:%M:%S')]
                     }
                     pd.DataFrame(summary_data).to_excel(
@@ -348,15 +389,143 @@ class JiraXMLExtractor:
                             worksheet.column_dimensions[column_letter].width = adjusted_width
                 
                 messagebox.showinfo("Success", 
-                                  f"Data exported successfully to:\n{filename}")
+                                  f"Data exported successfully to:\n{filename}\n\nColumns exported: {len(selected_columns)}")
                 self.status_label.config(
-                    text=f"Exported to {os.path.basename(filename)}",
+                    text=f"Exported {len(selected_columns)} columns to {os.path.basename(filename)}",
                     foreground="green"
                 )
                 
             except Exception as e:
                 messagebox.showerror("Error", 
                                    f"Error exporting to Excel:\n{str(e)}")
+    
+    def show_column_selector(self):
+        """Show dialog to select columns for export"""
+        if not self.extracted_data:
+            return None
+        
+        # Create dialog window
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Select Columns to Export")
+        dialog.geometry("600x500")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # Variables to store result
+        selected_columns = []
+        column_vars = {}
+        
+        # Get all available columns
+        all_columns = list(self.extracted_data[0].keys())
+        
+        # Identify description fields (extracted from description)
+        description_fields = [
+            'Date of Request', 'Name of Requestor', 
+            'Requestor\'s Email Address', 
+            'Business Segment / Corporate Function',
+            'Please select the type of output', 'Name of Output',
+            'What is the scope', 'What is the purpose',
+            'Name of Data Owner', 'Link to Data Owner Approval'
+        ]
+        
+        # Main frame
+        main_frame = ttk.Frame(dialog, padding="10")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Title
+        ttk.Label(main_frame, text="Select columns to include in Excel export:", 
+                 font=("Arial", 11, "bold")).pack(pady=(0, 10))
+        
+        # Quick select buttons frame
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        def select_description_only():
+            for col in column_vars:
+                if col in description_fields:
+                    column_vars[col].set(True)
+                else:
+                    column_vars[col].set(False)
+        
+        def select_all():
+            for var in column_vars.values():
+                var.set(True)
+        
+        def deselect_all():
+            for var in column_vars.values():
+                var.set(False)
+        
+        ttk.Button(button_frame, text="Select Description Fields Only", 
+                  command=select_description_only).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Select All", 
+                  command=select_all).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Deselect All", 
+                  command=deselect_all).pack(side=tk.LEFT, padx=5)
+        
+        # Create scrollable frame for checkboxes
+        canvas = tk.Canvas(main_frame)
+        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Group columns
+        ttk.Label(scrollable_frame, text="Description Fields (Extracted):", 
+                 font=("Arial", 10, "bold"), foreground="blue").pack(anchor=tk.W, pady=(5, 2))
+        
+        for col in all_columns:
+            if col in description_fields:
+                var = tk.BooleanVar(value=True)  # Description fields selected by default
+                column_vars[col] = var
+                cb = ttk.Checkbutton(scrollable_frame, text=col, variable=var)
+                cb.pack(anchor=tk.W, padx=20)
+        
+        ttk.Separator(scrollable_frame, orient='horizontal').pack(fill=tk.X, pady=10)
+        
+        ttk.Label(scrollable_frame, text="Standard JIRA Fields:", 
+                 font=("Arial", 10, "bold"), foreground="green").pack(anchor=tk.W, pady=(5, 2))
+        
+        for col in all_columns:
+            if col not in description_fields and col != 'Raw Description':
+                var = tk.BooleanVar(value=False)  # JIRA fields unselected by default
+                column_vars[col] = var
+                cb = ttk.Checkbutton(scrollable_frame, text=col, variable=var)
+                cb.pack(anchor=tk.W, padx=20)
+        
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Bottom buttons
+        bottom_frame = ttk.Frame(main_frame)
+        bottom_frame.pack(fill=tk.X, pady=(10, 0))
+        
+        def on_export():
+            selected = [col for col, var in column_vars.items() if var.get()]
+            if not selected:
+                messagebox.showwarning("No Selection", 
+                                      "Please select at least one column!")
+                return
+            selected_columns.extend(selected)
+            dialog.destroy()
+        
+        def on_cancel():
+            dialog.destroy()
+        
+        ttk.Button(bottom_frame, text="Export Selected", 
+                  command=on_export).pack(side=tk.RIGHT, padx=5)
+        ttk.Button(bottom_frame, text="Cancel", 
+                  command=on_cancel).pack(side=tk.RIGHT, padx=5)
+        
+        # Wait for dialog to close
+        self.root.wait_window(dialog)
+        
+        return selected_columns if selected_columns else None
     
     def clear_all(self):
         """Clear all data and reset"""
