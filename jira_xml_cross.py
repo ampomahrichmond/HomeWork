@@ -188,46 +188,44 @@ class JiraXMLExtractor:
         # First, extract URLs before stripping HTML (for link fields)
         link_urls = extract_urls_from_html(description)
         
-        # Now strip HTML tags from the entire description for pattern matching
+        # Strip HTML but preserve line breaks
         clean_description = strip_html_tags(description)
         
         # Dictionary to store extracted fields
         fields = {}
         
-        # Common patterns in JIRA descriptions - matching after stripping HTML
-        patterns = {
-            'Date of Request': r'Date of Request\s*:?\s*([^\n]+)',
-            'Name of Requestor': r'Name of Requestor\s*:?\s*([^\n]+)',
-            'Requestor\'s Email Address': r'Requestor[\']*s?\s*Email Address\s*:?\s*([^\n]+)',
-            'Business Segment / Corporate Function': r'Business Segment\s*/?\s*Corporate Function\s*:?\s*([^\n]+)',
-            'Please select the type of output': r'Please select[^:]*type of output\s*:?\s*([^\n]+)',
-            'Name of Output': r'Name of Output\s*:?\s*([^\n]+)',
-            'What is the scope': r'What is the scope[^:]*:?\s*([^\n]+)',
-            'What is the purpose': r'What is the purpose[^:]*:?\s*([^\n]+)',
-            'Name of Data Owner': r'Name of Data Owner\s*:?\s*([^\n]+)',
-            'Link to Data Owner Approval': None,  # Special handling for URLs
-        }
+        # Define field patterns - these will match the field label and capture only its value
+        # Using negative lookahead to stop at the next field or end of string
+        field_patterns = [
+            ('Date of Request', r'Date of Request\s*:?\s*([^\n\r]+?)(?=\s*(?:Name of Requestor|Requestor[\']*s?\s*Email|Business Segment|Please select|Name of Output|What is the scope|What is the purpose|Name of Data Owner|Link to Data Owner|$))'),
+            ('Name of Requestor', r'Name of Requestor\s*:?\s*([^\n\r]+?)(?=\s*(?:Requestor[\']*s?\s*Email|Business Segment|Please select|Name of Output|What is the scope|What is the purpose|Name of Data Owner|Link to Data Owner|$))'),
+            ('Requestor\'s Email Address', r'Requestor[\']*s?\s*Email Address\s*:?\s*([^\n\r]+?)(?=\s*(?:Business Segment|Please select|Name of Output|What is the scope|What is the purpose|Name of Data Owner|Link to Data Owner|$))'),
+            ('Business Segment / Corporate Function', r'Business Segment\s*/?\s*Corporate Function\s*:?\s*([^\n\r]+?)(?=\s*(?:Please select|Name of Output|What is the scope|What is the purpose|Name of Data Owner|Link to Data Owner|$))'),
+            ('Please select the type of output', r'Please select[^:]*type of output\s*:?\s*([^\n\r]+?)(?=\s*(?:Name of Output|What is the scope|What is the purpose|Name of Data Owner|Link to Data Owner|$))'),
+            ('Name of Output', r'Name of Output\s*:?\s*([^\n\r]+?)(?=\s*(?:What is the scope|What is the purpose|Name of Data Owner|Link to Data Owner|$))'),
+            ('What is the scope', r'What is the scope[^:]*:?\s*([^\n\r]+?)(?=\s*(?:What is the purpose|Name of Data Owner|Link to Data Owner|$))'),
+            ('What is the purpose', r'What is the purpose[^:]*:?\s*([^\n\r]+?)(?=\s*(?:Name of Data Owner|Link to Data Owner|$))'),
+            ('Name of Data Owner', r'Name of Data Owner\s*:?\s*([^\n\r]+?)(?=\s*(?:Link to Data Owner|$))'),
+        ]
         
-        for field_name, pattern in patterns.items():
-            if field_name == 'Link to Data Owner Approval':
-                # Special handling: use extracted URLs
-                if link_urls:
-                    # Join multiple URLs with line breaks for Excel
-                    fields[field_name] = '\n'.join(link_urls)
-                else:
-                    fields[field_name] = ""
-            elif pattern:
-                match = re.search(pattern, clean_description, re.IGNORECASE)
-                if match:
-                    # Extract value and clean it
-                    raw_value = match.group(1).strip()
-                    # Remove any remaining special characters or extra whitespace
-                    clean_value = re.sub(r'\s+', ' ', raw_value).strip()
-                    fields[field_name] = clean_value
-                else:
-                    fields[field_name] = ""
+        # Process each field
+        for field_name, pattern in field_patterns:
+            match = re.search(pattern, clean_description, re.IGNORECASE | re.DOTALL)
+            if match:
+                # Extract value and clean it
+                raw_value = match.group(1).strip()
+                # Remove any extra whitespace
+                clean_value = re.sub(r'\s+', ' ', raw_value).strip()
+                fields[field_name] = clean_value
             else:
                 fields[field_name] = ""
+        
+        # Special handling for Link to Data Owner Approval - use extracted URLs
+        if link_urls:
+            # Join multiple URLs with line breaks for Excel
+            fields['Link to Data Owner Approval'] = '\n'.join(link_urls)
+        else:
+            fields['Link to Data Owner Approval'] = ""
         
         return fields
     
