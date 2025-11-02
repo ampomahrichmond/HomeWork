@@ -143,7 +143,7 @@ class ExcelDQAnalyzer:
     def __init__(self, root):
         self.root = root
         self.root.title("Excel Data Quality Analyzer - Enhanced")
-        self.root.geometry("1400x900")
+        self.root.geometry("1400x950")
         self.root.configure(bg="#f0f0f0")
         
         # Variables
@@ -360,6 +360,9 @@ class ExcelDQAnalyzer:
         )
         results_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
         
+        # Set minimum height to ensure buttons below are visible
+        results_frame.pack_propagate(True)
+        
         # Create notebook for tabs
         self.notebook = ttk.Notebook(results_frame)
         self.notebook.pack(fill=tk.BOTH, expand=True)
@@ -374,7 +377,8 @@ class ExcelDQAnalyzer:
             font=("Courier", 10),
             bg="white",
             padx=10,
-            pady=10
+            pady=10,
+            height=15
         )
         self.summary_text.pack(fill=tk.BOTH, expand=True)
         
@@ -388,41 +392,60 @@ class ExcelDQAnalyzer:
             font=("Courier", 9),
             bg="white",
             padx=10,
-            pady=10
+            pady=10,
+            height=15
         )
         self.log_text.pack(fill=tk.BOTH, expand=True)
         
     def setup_action_buttons(self, parent):
         """Setup action buttons"""
-        action_frame = tk.Frame(parent, bg="#f0f0f0")
-        action_frame.pack(fill=tk.X)
+        action_frame = tk.Frame(parent, bg="#f0f0f0", relief=tk.RAISED, borderwidth=2)
+        action_frame.pack(fill=tk.X, pady=10)
+        
+        # Add a label to make it more obvious
+        button_label = tk.Label(
+            action_frame,
+            text="🎯 Actions",
+            font=("Helvetica", 11, "bold"),
+            bg="#f0f0f0",
+            fg="#2c3e50"
+        )
+        button_label.pack(pady=(5, 5))
+        
+        # Button container
+        button_container = tk.Frame(action_frame, bg="#f0f0f0")
+        button_container.pack(pady=(0, 10))
         
         self.analyze_btn = tk.Button(
-            action_frame,
+            button_container,
             text="🚀 Start Analysis",
             command=self.start_analysis,
-            font=("Helvetica", 12, "bold"),
+            font=("Helvetica", 13, "bold"),
             bg="#27ae60",
             fg="white",
-            padx=30,
-            pady=10,
-            cursor="hand2"
+            padx=40,
+            pady=12,
+            cursor="hand2",
+            relief=tk.RAISED,
+            borderwidth=3
         )
-        self.analyze_btn.pack(side=tk.LEFT, padx=(0, 10))
+        self.analyze_btn.pack(side=tk.LEFT, padx=10)
         
         self.export_btn = tk.Button(
-            action_frame,
+            button_container,
             text="💾 Export Results to Excel",
             command=self.export_results,
-            font=("Helvetica", 12, "bold"),
+            font=("Helvetica", 13, "bold"),
             bg="#f39c12",
             fg="white",
-            padx=30,
-            pady=10,
+            padx=40,
+            pady=12,
             cursor="hand2",
-            state=tk.DISABLED
+            state=tk.DISABLED,
+            relief=tk.RAISED,
+            borderwidth=3
         )
-        self.export_btn.pack(side=tk.LEFT)
+        self.export_btn.pack(side=tk.LEFT, padx=10)
         
     def add_files(self):
         """Add files and select sheets"""
