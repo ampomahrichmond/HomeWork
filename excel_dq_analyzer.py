@@ -564,41 +564,48 @@ class ExcelDQAnalyzer:
         )
         self.log_message(f"Selected Sheets: {', '.join(selected_sheets)}", "INFO")
         
-        # Load workbook
-        wb = openpyxl.load_workbook(file_path, data_only=False)
+        # Load workbook WITHOUT data_only to check formulas
+        wb_formulas = openpyxl.load_workbook(file_path, data_only=False)
+        # Load workbook WITH data_only to get evaluated values
+        wb_values = openpyxl.load_workbook(file_path, data_only=True)
         
         # Find evaluation and scoping sheets
-        eval_sheet = None
-        scoping_sheet = None
+        eval_sheet_formulas = None
+        eval_sheet_values = None
+        scoping_sheet_formulas = None
+        scoping_sheet_values = None
         
         for sheet_name in selected_sheets:
-            if sheet_name not in wb.sheetnames:
+            if sheet_name not in wb_formulas.sheetnames:
                 self.log_message(f"WARNING: Sheet '{sheet_name}' not found!", "WARNING")
                 continue
                 
             sheet_lower = sheet_name.lower()
             if "evaluation" in sheet_lower and "control" in sheet_lower:
-                eval_sheet = wb[sheet_name]
+                eval_sheet_formulas = wb_formulas[sheet_name]
+                eval_sheet_values = wb_values[sheet_name]
                 self.log_message(f"Found Evaluation Sheet: {sheet_name}", "INFO")
             elif "scoping" in sheet_lower and "control" in sheet_lower:
-                scoping_sheet = wb[sheet_name]
+                scoping_sheet_formulas = wb_formulas[sheet_name]
+                scoping_sheet_values = wb_values[sheet_name]
                 self.log_message(f"Found Scoping Sheet: {sheet_name}", "INFO")
         
-        if not eval_sheet:
+        if not eval_sheet_formulas:
             self.log_message("ERROR: DQ Controls Evaluation Sheet not found in selected sheets!", "ERROR")
         else:
-            self.analyze_evaluation_sheet(eval_sheet, file_path)
+            self.analyze_evaluation_sheet(eval_sheet_formulas, eval_sheet_values, file_path)
             
-        if not scoping_sheet:
+        if not scoping_sheet_formulas:
             self.log_message("ERROR: DQ Control Scoping sheet not found in selected sheets!", "ERROR")
         else:
-            self.analyze_scoping_sheet(scoping_sheet, file_path)
+            self.analyze_scoping_sheet(scoping_sheet_formulas, file_path)
             
         # Cross-reference check
-        if eval_sheet and scoping_sheet:
-            self.cross_reference_check(eval_sheet, scoping_sheet, file_path)
+        if eval_sheet_values and scoping_sheet_values:
+            self.cross_reference_check(eval_sheet_values, scoping_sheet_values, file_path)
         
-        wb.close()
+        wb_formulas.close()
+        wb_values.close()
         
     def find_header_row(self, sheet, header_keywords):
         """Find the header row based on keywords"""
@@ -612,13 +619,13 @@ class ExcelDQAnalyzer:
                 return row_idx
         return None
         
-    def analyze_evaluation_sheet(self, sheet, file_path):
+    def analyze_evaluation_sheet(self, sheet_formulas, sheet_values, file_path):
         """Analyze the DQ Controls Evaluation Sheet"""
         self.log_message("\n--- DQ Controls Evaluation Sheet Analysis ---", "INFO")
         
         # Find header row
         header_keywords = ["MAL", "DATABASE", "UNIQUE IDENTIFIER"]
-        header_row = self.find_header_row(sheet, header_keywords)
+        header_row = self.find_header_row(sheet_formulas, header_keywords)
         
         if not header_row:
             self.log_message("ERROR: Could not find header row in Evaluation Sheet", "ERROR")
@@ -633,36 +640,42 @@ class ExcelDQAnalyzer:
         passed = 0
         failed = 0
         
-        for row_idx in range(header_row + 1, sheet.max_row + 1):
-            cell = sheet.cell(row=row_idx, column=col_d_idx)
-            cell_value = cell.value
+        for row_idx in range(header_row + 1, sheet_formulas.max_row + 1):
+            # Get formula from formula sheet
+            cell_formula = sheet_formulas.cell(row=row_idx, column=col_d_idx)
+            cell_formula_value = cell_formula.value
             
-            if not cell_value or str(cell_value).strip() == "":
+            # Get evaluated value from value sheet
+            cell_value = sheet_values.cell(row=row_idx, column=col_d_idx)
+            evaluated_value = cell_value.value
+            
+            if not evaluated_value or str(evaluated_value).strip() == "":
                 continue
                 
-            # Get the actual string value (removing formula prefix if present)
-            actual_value = str(cell_value).replace('=', '').strip()
+            # Convert to string for processing
+            evaluated_value_str = str(evaluated_value).strip()
             
-            if actual_value == "" or actual_value == "None":
+            if evaluated_value_str == "None" or evaluated_value_str == "":
                 continue
             
-            # Check 1: Is it a formula?
-            is_formula = str(cell_value).startswith('=')
+            # Check 1: Is it a formula? (check the formula sheet)
+            is_formula = str(cell_formula_value).startswith('=') if cell_formula_value else False
             formula_check = "PASSED" if is_formula else "FAILED"
             
-            # Check 2: Does it have exactly 5 components separated by '.'?
+            # Check 2: Does the EVALUATED VALUE have exactly 5 components separated by '.'?
             # Split by period only, underscores are part of the component
-            components = actual_value.split('.')
+            components = evaluated_value_str.split('.')
             component_count = len(components)
             component_check = "PASSED" if component_count == 5 else "FAILED"
             
             # Log the result
             result = {
                 "File": os.path.basename(file_path),
-                "Sheet": sheet.title,
+                "Sheet": sheet_formulas.title,
                 "Row": row_idx,
                 "Cell": f"D{row_idx}",
-                "Full_Value": actual_value,
+                "Formula_Text": str(cell_formula_value)[:100] if cell_formula_value else "N/A",
+                "Evaluated_Value": evaluated_value_str,
                 "Formula Check": formula_check,
                 "Component Check": component_check,
                 "Component Count": component_count,
@@ -678,13 +691,13 @@ class ExcelDQAnalyzer:
             if formula_check == "PASSED" and component_check == "PASSED":
                 passed += 1
                 self.log_message(
-                    f"Row {row_idx}: ✓ ALL CHECKS PASSED - {actual_value[:60]}",
+                    f"Row {row_idx}: ✓ ALL CHECKS PASSED - Value: {evaluated_value_str[:70]}",
                     "INFO"
                 )
             else:
                 failed += 1
                 self.log_message(
-                    f"Row {row_idx}: ✗ FAILED - Formula: {formula_check}, Components: {component_check} (found {component_count}) - {actual_value[:60]}",
+                    f"Row {row_idx}: ✗ FAILED - Formula: {formula_check}, Components: {component_check} (found {component_count}) - Value: {evaluated_value_str[:70]}",
                     "WARNING"
                 )
                 
@@ -786,6 +799,7 @@ class ExcelDQAnalyzer:
     def cross_reference_check(self, eval_sheet, scoping_sheet, file_path):
         """Cross-reference between Evaluation and Scoping sheets"""
         self.log_message("\n--- Cross-Reference Validation ---", "INFO")
+        self.log_message("Validating that Column D components match Columns Z-AD in Scoping sheet", "INFO")
         
         # Find headers
         eval_header_row = self.find_header_row(eval_sheet, ["MAL", "DATABASE"])
@@ -804,6 +818,7 @@ class ExcelDQAnalyzer:
         )
         
         # Load scoping data (columns Z-AD are columns 26-30)
+        # Z=26 (System), AA=27 (Database), AB=28 (Schema), AC=29 (Table), AD=30 (Column)
         scoping_data = []
         for row_idx in range(scoping_header_row, min(scoping_header_row + 2000, scoping_sheet.max_row + 1)):
             row_data = {
@@ -819,7 +834,7 @@ class ExcelDQAnalyzer:
             if any([v for k, v in row_data.items() if k != "Row"]):
                 scoping_data.append(row_data)
                 
-        self.log_message(f"Loaded {len(scoping_data)} scoping records", "INFO")
+        self.log_message(f"Loaded {len(scoping_data)} scoping records from columns Z-AD", "INFO")
         
         # Check each evaluation row
         matched = 0
@@ -827,16 +842,17 @@ class ExcelDQAnalyzer:
         
         for row_idx in range(eval_header_row + 1, min(eval_header_row + 2000, eval_sheet.max_row + 1)):
             cell = eval_sheet.cell(row=row_idx, column=4)  # Column D
-            cell_value = str(cell.value or "").replace('=', '').strip()
+            # Get the evaluated value (not the formula)
+            cell_value = str(cell.value or "").strip()
             
             if not cell_value or cell_value == "None":
                 continue
                 
-            # Split into components
+            # Split into components - cell_value should already be the concatenated result
             components = cell_value.split('.')
             if len(components) != 5:
                 self.log_message(
-                    f"Row {row_idx}: Skipping - Invalid component count ({len(components)})",
+                    f"Row {row_idx}: Skipping - Invalid component count ({len(components)}) in value: {cell_value[:60]}",
                     "WARNING"
                 )
                 continue
@@ -892,11 +908,11 @@ class ExcelDQAnalyzer:
                 "Component_4_Table": comp_table,
                 "Component_5_Column": comp_column,
                 "Match_Found": "YES" if match_found else "NO",
-                "System_Match": "PASS" if component_matches["System"] or match_found else "FAIL",
-                "Database_Match": "PASS" if component_matches["Database"] or match_found else "FAIL",
-                "Schema_Match": "PASS" if component_matches["Schema"] or match_found else "FAIL",
-                "Table_Match": "PASS" if component_matches["Table"] or match_found else "FAIL",
-                "Column_Match": "PASS" if component_matches["Column"] or match_found else "FAIL",
+                "System_Match_Col_Z": "PASS" if component_matches["System"] or match_found else "FAIL",
+                "Database_Match_Col_AA": "PASS" if component_matches["Database"] or match_found else "FAIL",
+                "Schema_Match_Col_AB": "PASS" if component_matches["Schema"] or match_found else "FAIL",
+                "Table_Match_Col_AC": "PASS" if component_matches["Table"] or match_found else "FAIL",
+                "Column_Match_Col_AD": "PASS" if component_matches["Column"] or match_found else "FAIL",
                 "Matched_Scoping_Row": matched_row if match_found else "N/A"
             }
             
@@ -905,22 +921,22 @@ class ExcelDQAnalyzer:
             if match_found:
                 matched += 1
                 self.log_message(
-                    f"Row {row_idx}: ✓ COMPLETE MATCH - {cell_value[:60]} (matched to Scoping row {matched_row})",
+                    f"Row {row_idx}: ✓ COMPLETE MATCH - {cell_value[:60]} (matched to Scoping row {matched_row}, columns Z-AD)",
                     "INFO"
                 )
             else:
                 unmatched += 1
                 self.log_message(
-                    f"Row {row_idx}: ✗ NO MATCH - {cell_value[:60]}",
+                    f"Row {row_idx}: ✗ NO MATCH in Scoping columns Z-AD - {cell_value[:60]}",
                     "WARNING"
                 )
                 self.log_message(
-                    f"  Components: {comp_system} | {comp_database} | {comp_schema} | {comp_table} | {comp_column}",
+                    f"  Looking for: Z={comp_system} | AA={comp_database} | AB={comp_schema} | AC={comp_table} | AD={comp_column}",
                     "WARNING"
                 )
                 
         self.log_message(
-            f"\nCross-Reference Summary: {matched} MATCHED, {unmatched} UNMATCHED",
+            f"\nCross-Reference Summary: {matched} MATCHED, {unmatched} UNMATCHED (checked against Scoping columns Z-AD)",
             "INFO"
         )
         
