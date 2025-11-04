@@ -799,7 +799,7 @@ class ExcelDQAnalyzer:
     def cross_reference_check(self, eval_sheet, scoping_sheet, file_path):
         """Cross-reference between Evaluation and Scoping sheets"""
         self.log_message("\n--- Cross-Reference Validation ---", "INFO")
-        self.log_message("Validating that Column D components match Columns Z-AD in Scoping sheet", "INFO")
+        self.log_message("Validating that Column D components match Columns R, V, U, W, X in Scoping sheet", "INFO")
         
         # Find headers
         eval_header_row = self.find_header_row(eval_sheet, ["MAL", "DATABASE"])
@@ -817,16 +817,16 @@ class ExcelDQAnalyzer:
             "INFO"
         )
         
-        # Load scoping data (columns Z-AD are columns 26-30)
-        # Z=26 (System), AA=27 (Database), AB=28 (Schema), AC=29 (Table), AD=30 (Column)
+        # Load scoping data using the CORRECT columns: R, V, U, W, X
+        # R=18 (MAL/EUC), V=22 (Database), U=21 (Schema), W=23 (Table), X=24 (Column)
         scoping_data = []
         for row_idx in range(scoping_header_row, min(scoping_header_row + 2000, scoping_sheet.max_row + 1)):
             row_data = {
-                "System": str(scoping_sheet.cell(row=row_idx, column=26).value or "").strip().upper(),
-                "Database": str(scoping_sheet.cell(row=row_idx, column=27).value or "").strip().upper(),
-                "Schema": str(scoping_sheet.cell(row=row_idx, column=28).value or "").strip().upper(),
-                "Table": str(scoping_sheet.cell(row=row_idx, column=29).value or "").strip().upper(),
-                "Column": str(scoping_sheet.cell(row=row_idx, column=30).value or "").strip().upper(),
+                "MAL_EUC": str(scoping_sheet.cell(row=row_idx, column=18).value or "").strip().upper(),     # Column R
+                "Database": str(scoping_sheet.cell(row=row_idx, column=22).value or "").strip().upper(),    # Column V
+                "Schema": str(scoping_sheet.cell(row=row_idx, column=21).value or "").strip().upper(),      # Column U
+                "Table": str(scoping_sheet.cell(row=row_idx, column=23).value or "").strip().upper(),       # Column W
+                "Column": str(scoping_sheet.cell(row=row_idx, column=24).value or "").strip().upper(),      # Column X
                 "Row": row_idx
             }
             
@@ -834,7 +834,7 @@ class ExcelDQAnalyzer:
             if any([v for k, v in row_data.items() if k != "Row"]):
                 scoping_data.append(row_data)
                 
-        self.log_message(f"Loaded {len(scoping_data)} scoping records from columns Z-AD", "INFO")
+        self.log_message(f"Loaded {len(scoping_data)} scoping records from columns R, V, U, W, X", "INFO")
         
         # Check each evaluation row
         matched = 0
@@ -858,17 +858,17 @@ class ExcelDQAnalyzer:
                 continue
                 
             # Normalize components (case-insensitive)
-            comp_system = components[0].strip().upper()
-            comp_database = components[1].strip().upper()
-            comp_schema = components[2].strip().upper()
-            comp_table = components[3].strip().upper()
-            comp_column = components[4].strip().upper()
+            comp_mal_euc = components[0].strip().upper()      # Component 1 → Column R
+            comp_database = components[1].strip().upper()      # Component 2 → Column V
+            comp_schema = components[2].strip().upper()        # Component 3 → Column U
+            comp_table = components[3].strip().upper()         # Component 4 → Column W
+            comp_column = components[4].strip().upper()        # Component 5 → Column X
             
             # Try to find match in scoping data
             match_found = False
             matched_row = None
             component_matches = {
-                "System": False,
+                "MAL_EUC": False,
                 "Database": False,
                 "Schema": False,
                 "Table": False,
@@ -876,19 +876,19 @@ class ExcelDQAnalyzer:
             }
             
             for scoping_row in scoping_data:
-                # Check each component
-                sys_match = scoping_row["System"] == comp_system
-                db_match = scoping_row["Database"] == comp_database
-                schema_match = scoping_row["Schema"] == comp_schema
-                table_match = scoping_row["Table"] == comp_table
-                col_match = scoping_row["Column"] == comp_column
+                # Check each component against the CORRECT columns
+                mal_match = scoping_row["MAL_EUC"] == comp_mal_euc      # R
+                db_match = scoping_row["Database"] == comp_database      # V
+                schema_match = scoping_row["Schema"] == comp_schema      # U
+                table_match = scoping_row["Table"] == comp_table         # W
+                col_match = scoping_row["Column"] == comp_column         # X
                 
                 # All components must match
-                if all([sys_match, db_match, schema_match, table_match, col_match]):
+                if all([mal_match, db_match, schema_match, table_match, col_match]):
                     match_found = True
                     matched_row = scoping_row["Row"]
                     component_matches = {
-                        "System": True,
+                        "MAL_EUC": True,
                         "Database": True,
                         "Schema": True,
                         "Table": True,
@@ -902,17 +902,17 @@ class ExcelDQAnalyzer:
                 "Eval_Sheet": eval_sheet.title,
                 "Eval_Row": row_idx,
                 "Full_String": cell_value,
-                "Component_1_System": comp_system,
+                "Component_1_MAL_EUC": comp_mal_euc,
                 "Component_2_Database": comp_database,
                 "Component_3_Schema": comp_schema,
                 "Component_4_Table": comp_table,
                 "Component_5_Column": comp_column,
                 "Match_Found": "YES" if match_found else "NO",
-                "System_Match_Col_Z": "PASS" if component_matches["System"] or match_found else "FAIL",
-                "Database_Match_Col_AA": "PASS" if component_matches["Database"] or match_found else "FAIL",
-                "Schema_Match_Col_AB": "PASS" if component_matches["Schema"] or match_found else "FAIL",
-                "Table_Match_Col_AC": "PASS" if component_matches["Table"] or match_found else "FAIL",
-                "Column_Match_Col_AD": "PASS" if component_matches["Column"] or match_found else "FAIL",
+                "MAL_EUC_Match_Col_R": "PASS" if component_matches["MAL_EUC"] or match_found else "FAIL",
+                "Database_Match_Col_V": "PASS" if component_matches["Database"] or match_found else "FAIL",
+                "Schema_Match_Col_U": "PASS" if component_matches["Schema"] or match_found else "FAIL",
+                "Table_Match_Col_W": "PASS" if component_matches["Table"] or match_found else "FAIL",
+                "Column_Match_Col_X": "PASS" if component_matches["Column"] or match_found else "FAIL",
                 "Matched_Scoping_Row": matched_row if match_found else "N/A"
             }
             
@@ -921,22 +921,22 @@ class ExcelDQAnalyzer:
             if match_found:
                 matched += 1
                 self.log_message(
-                    f"Row {row_idx}: ✓ COMPLETE MATCH - {cell_value[:60]} (matched to Scoping row {matched_row}, columns Z-AD)",
+                    f"Row {row_idx}: ✓ COMPLETE MATCH - {cell_value[:60]} (matched to Scoping row {matched_row}, columns R,V,U,W,X)",
                     "INFO"
                 )
             else:
                 unmatched += 1
                 self.log_message(
-                    f"Row {row_idx}: ✗ NO MATCH in Scoping columns Z-AD - {cell_value[:60]}",
+                    f"Row {row_idx}: ✗ NO MATCH in Scoping columns R,V,U,W,X - {cell_value[:60]}",
                     "WARNING"
                 )
                 self.log_message(
-                    f"  Looking for: Z={comp_system} | AA={comp_database} | AB={comp_schema} | AC={comp_table} | AD={comp_column}",
+                    f"  Looking for: R={comp_mal_euc} | V={comp_database} | U={comp_schema} | W={comp_table} | X={comp_column}",
                     "WARNING"
                 )
                 
         self.log_message(
-            f"\nCross-Reference Summary: {matched} MATCHED, {unmatched} UNMATCHED (checked against Scoping columns Z-AD)",
+            f"\nCross-Reference Summary: {matched} MATCHED, {unmatched} UNMATCHED (checked against Scoping columns R,V,U,W,X)",
             "INFO"
         )
         
