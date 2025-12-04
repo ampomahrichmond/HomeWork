@@ -1,0 +1,89 @@
+1. Executive Summary
+The Data Management Automation (DMA) system serves as the centralized engine for enterprise data integrity. It orchestrates the execution of 9,800+ Data Quality (DQ) rules monthly across four business segments.
+
+Crucially, this system focuses strictly on Organizationally Approved Critical Data Elements (CDEs). This document outlines the technical and operational requirements necessary to maintain the Data Quality Assessment Dashboards (DQADs). It also details the technical proficiency required if this responsibility were to be transferred directly to the Business Segments.
+
+2. Business Process & Scope
+2.1 Governance & Coverage
+Target Scope: DQ checks are applied exclusively to CDEs that have received formal Organizational Approval. Unapproved or "shadow" data elements are excluded to ensure regulatory focus.
+
+Business Segments: 4 (Consumer, Commercial, Enterprise, etc.).
+
+Execution Frequency: Monthly Cycle (reporting due Business Day 5).
+
+2.2 Core Objectives
+Regulatory Compliance: Automated validation of Approved CDEs for regulatory filings.
+
+Asset Quality Assurance: Verification of Commercial and Consumer loan data accuracy.
+
+Traceability: End-to-end data lineage and CDE tagging.
+
+3. Functional Requirements
+3.1 Data Ingestion & Connectivity
+The system must maintain active, authenticated connections to extract monthly snapshots from:
+
+SQL Databases: RRDW and Rahona AZ.
+
+Requirement: The system must handle high-volume extraction within a 4-hour window to meet the BD5 SLA.
+
+3.2 Rule Execution & Processing
+The engine (Alteryx/Python) executes:
+
+Rule Application: 9,800+ logic rules against Approved CDEs.
+
+Workflow Orchestration: Management of ~200 distinct workflows involving metadata connections, access controls, and queries.
+
+4. Operational Requirements for Business Segments (Transfer of Ownership)
+Critical Section: If the central DMA work is discontinued, the Business Segments must assume full responsibility for the ecosystem. To successfully "run the DQ," the Business Segments must possess the following technical capabilities and access rights:
+
+4.1 Execution Readiness (Running the Reports)
+To simply keep the lights on and hit the BD5 deadline, the Business Segments require:
+
+Workflow Proficiency: A deep technical understanding of the 200+ Alteryx workflow schemas to troubleshoot failures during the run.
+
+System Access: Provisioned read/write access to RRDW and Rahona AZ.
+
+Orchestration: The ability to manually trigger or schedule the complex dependency chain of reports on Business Day 5.
+
+4.2 Change Management (New CDEs & Rules)
+If a new Approved CDE is identified, the Business Segment must be capable of the full implementation lifecycle:
+
+Metadata Management: They must edit the metadata repository to ingest and define the new CDE.
+
+Logic Definition: They must define the business rule (e.g., "Field X cannot be null").
+
+Implementation: They must write the code/logic and insert it into the automated workflow.
+
+4.3 Rule Maintenance (Decommissioning & Fixes)
+If a rule is flagged as obsolete or incorrect, the Business Segment is responsible for:
+
+Root Cause Analysis: Identifying why the rule failed or why it is no longer needed.
+
+SQL Engineering: Making direct edits to the SQL rule sets to modify or remove the logic.
+
+Deployment: Implementing the change into the production environment without breaking the remaining 9,800 rules.
+
+5. Technical Architecture & Stack
+The continuity of the process relies on the availability and integration of the following stack:
+
+Component	Technology	Requirement Detail
+Orchestration	Alteryx	Maintenance of 200+ workflows.
+Compute	Python & Databricks	Logic processing and CDE tagging (Azure Cloud).
+Storage	SQL (RRDW/Rahona)	Source data extraction and Rule Set storage.
+Visualization	PowerBI	Dashboard rendering.
+
+Export to Sheets
+
+
+Shutterstock
+Explore
+6. Business Impact & Risk Analysis
+6.1 Regulatory Risk (High)
+Current State: Validates Approved CDEs for Regulatory Reporting.
+
+Risk: Without the automation, Business Segments may fail to implement new regulatory rules on time, leading to MRA (Matters Requiring Attention).
+
+6.2 Operational Risk (High)
+Skill Gap: Business Segments are typically operational, not technical. Transferring the requirement to "write SQL" and "edit Alteryx Metadata" creates a high probability of error.
+
+SLA Breach: If the Business Segment cannot debug a failed workflow on BD4, they will miss the BD5 reporting deadline.
