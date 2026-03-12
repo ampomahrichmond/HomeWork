@@ -1,0 +1,325 @@
+## Problem Statements & Issues Raised
+
+### 1. Misalignment between EDC and Data Compass for ADLS structures
+
+- **Single table vs multiple tables from folders**
+  - In **EDC**, some assets (e.g., **HN VW_DB**, **13F**) are treated as **one table** even though the actual ADLS structure has multiple subfolders.
+  - In **Data Compass / Databricks**, the same structure naturally results in **multiple tables**, e.g.:
+    - **HN VW_DB** has subfolders like:
+      - `HN_W_retail_stage`
+      - `HN_W_wealth_stage`
+    - Data Compass therefore treats them as **two tables**, but **EDC represents them as a single table**, causing a mismatch.
+  - This makes it unclear:
+    - Which **underlying data files** EDC is actually using when it shows a single table.
+    - How to reliably **sync business metadata** between EDC and Data Compass when the physical table representation differs.
+
+- **Folder vs parquet file confusion**
+  - In Databricks / ADLS:
+    - Example: **13F** is actually a **folder**, with nested folders and a parquet file like `13F_SEC_filing_prep` under multiple subfolders.
+  - In EDC:
+    - The same **13F** appears as a **parquet file**, not as a folder.
+  - This misrepresentation means:
+    - EDC’s view of the asset does **not truly match** the platform (Databricks/ADLS) structure.
+    - That misalignment complicates **lineage, technical metadata mapping, and business metadata sync**.
+
+---
+
+### 2. Limitations in harvesting / import logic (folder depth & partitions)
+
+- **EDC harvest depth is limited**
+  - Current EDC configuration:
+    - Picks up **“curated + one folder + parquet file”**.
+    - Does **not** naturally go **two, three, or more folders deep**, unless import settings (include/exclude filters, partition directories) are explicitly changed.
+  - Result:
+    - Deeper parquet files (common in current ADLS practices) may **not be harvested**.
+    - Leads to **incomplete or misleading tables** being represented in EDC.
+
+- **Inconsistent partitioning & no standards**
+  - Partitioning / folder patterns under containers like **WCC 006**, **HN VW_DB**, **13F**, etc., are **not standardized**:
+    - Some have parquet files right after `curated/`.
+    - Others have parquet files several folders deep (e.g., `curated/preparator/13F/…/partition/.../parquet`).
+  - There is **no consistent naming or folder-depth convention** across CZ ADLS.
+  - Consequences:
+    - Hard to design **one harvesting pattern** that works for all containers.
+    - Makes **EDC ↔ Data Compass sync fragile**, especially when relying on path- or folder-based logic.
+
+---
+
+### 3. Hive metastore path length limit (128 characters)
+
+- **Current limitation**
+  - The Hive metastore used in the Databricks-based solution has a **128-character limit** for certain columns (e.g., path or table name representation).
+  - When full ADLS paths exceed this length:
+    - Paths (or path-based table names) must be **truncated**.
+    - That truncation breaks **full-path equality** between:
+      - What’s stored in Compass (via Hive/scanner), and
+      - What’s represented in EDC.
+
+- **Impact**
+  - **Business metadata sync** that depends on matching by full path or full technical identifier cannot reliably work if paths differ due to truncation.
+  - For tables that appear in **multiple locations** in the same storage account:
+    - They rely on **concatenating the full path into the table name**.
+    - The 128-character cap forces truncation and **loss of uniqueness or fidelity**.
+  - This becomes a **core technical blocker** to aligning ADLS/Databricks technical metadata with EDC and thereby syncing business metadata correctly.
+
+---
+
+### 4. Scanner / harvesting complexity and performance
+
+- **Scanner behavior vs EDC behavior**
+  - The **in-house scanner**:
+    - Recursively scans **all of ADLS**.
+    - Determines tables by **finding where parquet (or delta) files exist**.
+    - Uses the folder above the parquet file as the **table name**.
+    - Does **not** currently use the same **partition directory patterns** that EDC uses (as configured by Shelly).
+  - This difference in logic leads to:
+    - Different **table naming** and **structure recognition** compared to EDC.
+    - Difficulty achieving **consistent asset identity** between systems.
+
+- **Runtime and cost concerns**
+  - Example: scanning **WCC 006** (one app tenant within wealth):
+    - Took on the order of **12+ hours** (noted also as 10–20 hours in discussion).
+    - Long runtimes imply **significant compute cost** and operational pain.
+  - Lack of standards means:
+    - Scanner needs to handle many deep and irregular directory patterns.
+    - Further **increases complexity and runtime**.
+
+---
+
+### 5. Lack of curation/folder standards in CZ ADLS
+
+- **No enforced standard for where parquet files must live**
+  - Unlike SRZ, where there is a standard like:
+    - Everything must be under a **`current`** folder, then parquet.
+  - In CZ:
+    - Curated zones are owned by **segment-specific teams** (e.g., insurance, AMCB, etc.).
+    - Each team has historically been allowed to structure folders **however they like**.
+  - Effects:
+    - No consistent rule for “where to find parquet.”
+    - Hard to:
+      - Write **generic scanner code**.
+      - Produce **uniform EDC imports**.
+      - Guarantee that **future** assets will be compatible with current harvesting patterns.
+
+- **Standards can’t fix existing data quickly**
+  - Even if new standards are created now:
+    - Existing curated data sets, with **years of historical ETL**, won’t change overnight.
+    - Adjusting existing folder structures would require **major ETL rework**—months of effort, owned by many federated teams.
+  - So standards are necessary **for the future**, but do **not immediately resolve** current harvesting/sync issues.
+
+---
+
+### 6. ADLS business metadata gap & Synapse dependency
+
+- **ADLS assets generally lack business metadata**
+  - Data product consumers started using ADLS links, but discovered:
+    - ADLS assets in EDC do **not have business metadata**.
+  - As a workaround:
+    - Efforts are underway (e.g., **Param Singh**) to **remap ADLS links to Synapse links** in data products.
+    - Because **Synapse** is where:
+      - Business metadata is being curated more reliably.
+      - Technical metadata is already harvested into Data Compass.
+
+- **Consumption via Synapse today**
+  - Current pattern:
+    - Data is built and then **thrown into Synapse**; consumers access via Synapse.
+    - ADLS becomes more of a **backing store**, not the primary consumption endpoint.
+  - Implication:
+    - For many use cases today, the **value of fully harvesting ADLS** into EDC/Compass is **questionable**, except for specific models.
+
+- **Future direction (Unity, direct ADLS)**
+  - Long term, plan is:
+    - Eventually **remove Synapse** and consume **directly from ADLS**.
+  - This creates tension:
+    - ADLS may not be critical **right now**, but will be important **later**.
+    - The team needs to decide which **ADLS zones/models** are worth solving **now** vs deferring.
+
+---
+
+### 7. Partial / unreliable business metadata sync (EDC → Collibra/Compass)
+
+- **Current sync behavior**
+  - Business metadata sync from EDC to Collibra/Data Compass:
+    - Works **partially**.
+    - Some assets show business metadata; others are **missing it or only partially populated**.
+  - Suspected causes:
+    - Issues in the **EDC export/download process**.
+    - Issues in the **Java-based sync process** on the Collibra side.
+
+- **Consequences**
+  - Even where technical metadata may be harvested, **business metadata completeness is not guaranteed**.
+  - This undermines the **usefulness of Compass** for:
+    - Data discovery.
+    - Data product provisioning.
+    - Alignment with EDC as the system of record.
+
+---
+
+### 8. Architectural uncertainty: Hive vs bypassing Hive vs vendor solution
+
+- Multiple competing considerations:
+  - **Hive-based approach (current)**:
+    - Dependent on metastore constraints (e.g., 128-character limit).
+    - Adds an extra layer between ADLS and Compass.
+  - **Bypass Hive**:
+    - Build or extend an **in-house scanner** that writes **directly to Compass**, skipping Hive limitations entirely.
+  - **Collibra connectors / vendor solutions**:
+    - Explore whether Collibra has **native ADLS/Databricks connectors** that could:
+      - Avoid custom Hive-based or in-house scanning.
+      - Reduce bespoke logic and compatibility issues.
+
+- The group recognizes:
+  - This is not solvable **“within a week”**.
+  - They need a **tactical short-term plan** and a **strategic long-term plan**.
+
+---
+
+## Path Forward & Discussed Solutions
+
+### A. Tactical steps to continue progress now
+
+1. **Focus tactically on high-priority models/zones**
+   - **icz_0001** (insurance CZ ADLS model):
+     - Very active; frequent **bulk business metadata uploads**.
+     - Feeds **RMR** and therefore has clear downstream dependency.
+   - **TCZ 4004** (another CZ model feeding RMR).
+   - These are explicitly called out as **must-have** for EDC migration and Compass.
+
+2. **Adjust EDC import / partition directory patterns**
+   - Use the partitioning configuration that **Shelly** shared (include/exclude, partition directories) to:
+     - Allow EDC to pick up **multiple partition/folder levels** where required.
+     - Capture deeper parquet files beneath folders like `preparator/` and other non-standard intermediate directories.
+   - Goal:
+     - Make EDC’s technical view more aligned with what **actually exists** in ADLS.
+     - Enable more accurate **table representation** and **metadata sync**.
+
+3. **Align Data Compass scanner behavior with needed patterns**
+   - Evaluate whether the **in-house scanner** can:
+     - Incorporate similar **partition directory patterns**/filters as EDC uses.
+     - Still base table naming on “folder above the parquet file,” but **consistently** across all relevant containers.
+   - For immediate needs (like icz_0001 and specific WCC containers):
+     - Tune scanner for those paths and patterns first.
+
+4. **Investigate increasing the Hive metastore length limit**
+   - Explore if the **128-character limit** can be raised (e.g., via:
+     - ALTER commands on Hive tables/columns.
+     - Metastore configuration / environment variables).
+   - If feasible:
+     - Increase to something like **1024 characters** for path/table-name fields.
+     - This would:
+       - Eliminate the need to truncate ADLS paths.
+       - Allow storing **full paths** in Compass via Hive.
+       - Enable **exact matching** with EDC paths for business metadata sync.
+   - This is viewed as a **potentially high-value fix** with minimal code change if supported by the metastore.
+
+5. **Execute and monitor specific tests**
+   - **Cluster and query tests:**
+     - Bring up the **prod cluster** and run targeted Databricks queries against WCC 006, HN VW_DB, 13F, etc., to:
+       - Validate how partitions and paths behave in the **actual source**.
+       - Confirm where and how errors arise when querying at the root vs deeper levels.
+   - **Business metadata sync tests (tonight in production):**
+     - Test the EDC → Collibra sync with adjustments on:
+       - The **EDC download process**.
+       - The **Java sync process**.
+     - Measure whether:
+       - Business metadata coverage improves.
+       - Previously missing fields now populate correctly.
+
+6. **Document scanner performance and cost**
+   - Record and document:
+     - **Scan duration** (e.g., 12+ hours for WCC 006).
+     - Resource usage and operational impact.
+   - Use this data to:
+     - Justify **optimization work**.
+     - Support discussions with leadership (e.g., cost-benefit of better standards vs brute-force scanning).
+
+---
+
+### B. Strategic / medium-to-long-term directions
+
+1. **Clarify the role and value of ADLS harvesting today vs Synapse-first**
+
+   - Recognize current reality:
+     - **Synapse** is the primary consumption layer now; ADLS is largely **back-end**.
+     - Synapse technical metadata is already **fully harvested**, with business metadata sync in progress.
+   - Decide at leadership level:
+     - Which **ADLS containers** are genuinely needed **now** (e.g., those feeding RMR, icz_0001, TCZ 4004).
+     - Whether broad CZ ADLS harvesting can be **de-scoped** in the short term, except for critical models.
+   - Use that decision to:
+     - Reduce scope.
+     - Focus engineering effort on **high-value areas** instead of trying to solve all CZ ADLS at once.
+
+2. **Establish and enforce ADLS curation/folder standards**
+
+   - Work with **platform leadership (Valerie, Paula, platform team)** to:
+     - Define **clear standards** for:
+       - Where parquet/delta files **must** reside (e.g., under a `current` folder, or a similar standardized layer).
+       - Naming conventions for curated folder structures.
+   - Use the current challenges as a **concrete showcase**:
+     - Scanning complexity.
+     - 12+ hour runs on a single app tenant.
+     - Difficulty syncing EDC/Compass.
+   - Recognize:
+     - This will not fix **existing** data immediately.
+     - But it will prevent **future degradation** and improve maintainability.
+
+3. **Evaluate long-term architectural options**
+
+   - **Option 1: Keep and harden the Hive-based approach**
+     - Raise metastore limits (path length).
+     - Standardize how table names and paths are stored.
+     - Align scanner and EDC patterns around a stable set of conventions.
+   - **Option 2: Bypass Hive**
+     - Extend or rebuild the **in-house scanner** to:
+       - Read ADLS/Databricks structures directly.
+       - Write assets **straight into Compass**, avoiding Hive constraints.
+   - **Option 3: Leverage Collibra-native solutions**
+     - Engage Collibra to determine:
+       - If there are **ADLS/Databricks connectors** or enhanced ingestion paths.
+       - Whether vendor-supported capabilities can replace some of the custom Hive/Java/scanner logic.
+   - The group acknowledges:
+     - These options require **significant time** and planning.
+     - They belong to a **strategic roadmap**, not a one-week sprint.
+
+4. **Prepare a tactical + strategic plan for leadership**
+
+   - Compile:
+     - The **problem statements** (misaligned table representations, path length limitations, lack of standards, business metadata gaps).
+     - The **tactical fixes** (Hive length increase, targeted icz_0001/TCZ 4004 work, updated patterns, sync tests).
+     - The **strategic alternatives** (Hive hardening vs bypass vs Collibra connectors; ADLS vs Synapse priorities; standardization plan).
+   - Present this to leadership as:
+     - A **set of options with trade-offs**, timelines, and dependencies.
+     - Basis for a **clear decision** on how to treat ADLS harvesting and standards going forward.
+
+---
+
+### C. Conceptual “Solution Shape” they’re converging on
+
+Putting it all together, the group is implicitly moving toward:
+
+1. **Short-term:**
+   - Keep using **Synapse** as the primary consumption and metadata source.
+   - Fix **critical ADLS zones/models** only (icz_0001, TCZ 4004, etc.).
+   - Try to **relax Hive limits** and tune partition patterns to align EDC and Compass just enough to get:
+     - Reliable technical metadata.
+     - Working business metadata sync.
+
+2. **Medium-term:**
+   - Stabilize the **Hive/scanner approach** or decide to **bypass it**.
+   - Firm up **ADLS standards** for new data (e.g., “all parquet under ‘current’ or equivalent”).
+   - Ensure Synapse + ADLS metadata and business metadata can be **kept in sync**.
+
+3. **Long-term:**
+   - Prepare for a world where:
+     - Synapse may be deprecated in favor of **direct ADLS/Unity** consumption.
+     - ADLS harvesting is either:
+       - **Well-standardized and robust** under a hardened architecture (Hive or otherwise), or
+       - Managed by a **vendor-native solution** that reduces custom burden.
+
+---
+
+If you’d like, I can now extract just the **explicitly stated “issues” and “questions”** from participants (e.g., “what’s the issue?”, “is there any explanation?”, “why would we…?”) and map each one to the corresponding technical/architectural problem they imply.
+
+---
+
+Would you like me to pull out and list the **key decisions and open questions** that are still unresolved from this discussion?
