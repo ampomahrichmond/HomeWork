@@ -1,0 +1,155 @@
+This was an initial alignment conversation between the Data Compass / data governance team and the I&E / observability / database platform teams about how to harvest technical metadata (system catalogs/schemas) across the enterprise.
+
+The major ask from the Data Compass side is:
+
+Design and implement an enterprise‑level, scalable pattern to harvest system catalog/schema metadata from all key data platforms (on‑prem, cloud, SaaS) by leveraging existing observability/monitoring tools, and push that metadata into a central metadata lake feeding Data Compass—without deploying new agents or heavy crawlers everywhere.
+
+Major Ask (For Architects)
+Architects are being asked to design patterns that:
+
+Leverage existing tooling, not new crawlers/agents
+
+Reuse existing observability / monitoring / DB health‑check tooling (e.g., OEM for Oracle, SCOM for SQL Server, Dynatrace, others) to:
+Connect to databases and platforms using existing low‑privilege accounts.
+Extract system catalog / schema metadata (databases, schemas, tables, columns, data types, constraints, etc.).
+Push that metadata into a central metadata lake.
+Avoid:
+Spinning up a separate fleet of crawlers.
+Creating new service accounts/agents on every server.
+Support the full data estate over time
+
+Coverage to include:
+Structured: Oracle, SQL Server, Postgres, Databricks/Hive, etc.
+Semi‑structured: JSON, Parquet, Avro, logs, streams.
+Unstructured: files/blobs/call recordings (at least container/file‑level metadata).
+SaaS: especially contact center SaaS in AWS and other critical SaaS platforms.
+Environments:
+On‑prem, cloud (Azure, AWS, Rahona, Databricks), and hybrid.
+Integrate into Data Compass via a metadata lake
+
+Architects must define:
+How observability tools export metadata into a metadata lake.
+A standard metadata model in that lake.
+How Data Compass consumes that model to:
+Hydrate the catalog.
+Register and maintain data products (starting with those in Rahona, then beyond).
+Follow a risk‑based, MVP‑first rollout
+
+Start with a focused MVP:
+Big‑rock / AI use cases (e.g., SDLC, Contact Center, customer domain, TDI).
+Their key underlying platforms (e.g., Oracle/SQL, Databricks/Rahona, AWS sources).
+Then scale to broader platform coverage and more applications.
+Key Takeaways for Architects
+1. Current State & Pain Points
+Today (Rahona/Databricks):
+
+There is a homegrown Python crawler that:
+Takes a manually maintained manifest of Databricks/Azure tenants and accounts.
+Crawls for metadata.
+Pushes into a Hive metastore and then into Data Compass.
+Issues:
+Manual manifest maintenance.
+Weekly runs; team wants daily.
+Compute and operational cost of crawling.
+General frustration with crawling:
+
+Strong desire to avoid “crawling everything” and avoid:
+Per‑database onboarding work.
+Heavy compute costs.
+Another round of agents + service accounts everywhere.
+2. Target Direction (Architectural Intent)
+Use observability as the “one‑to‑few” access point
+
+Observability tools already:
+Have agents deployed.
+Have or can get DB accounts for monitoring/health checks.
+Architects should design patterns where those tools:
+Run lightweight system catalog queries.
+Export schema metadata.
+Feed it into a metadata lake (or observability data lake) that Data Compass can consume.
+Push over pull
+
+Preferred pattern:
+Platforms / observability tools push metadata to a defined endpoint (metadata lake or observability lake).
+Crawling remains:
+An interim / fallback approach only when absolutely necessary.
+Something to phase out with better push patterns.
+Re‑use DB health‑check / existing controls
+
+At prior orgs (JP), there was a control that every on‑prem DB had an agent doing health checks (space, performance, etc.).
+That same pattern can be used to:
+Run catalog queries and retrieve system metadata.
+Minimize new infrastructure and approval overhead.
+3. Scope & Prioritization
+Long‑term scope: effectively all data platforms (on‑prem, cloud, hybrid, SaaS) and all data types (structured, semi‑structured, unstructured).
+
+Near‑term (MVP) focus:
+
+Big rock AI use cases and tier‑1 data supply chains:
+E.g., Contact Center use case (AWS‑based).
+SDLC big rock (data products landing in Rahona).
+Customer profile/master / TDI where relevant.
+Platforms likely in early scope:
+Databricks / Rahona (via new Dynatrace connector instead of pure crawler).
+Key RDBMS (Oracle, SQL Server, possibly Postgres) both on‑prem and in cloud.
+The contact center data store(s) in AWS and any adjacent platforms.
+How to prioritize:
+
+By use case, not just raw data volume:
+Use big‑rock AI / RTS projects as primary drivers.
+Also consider application criticality (DCJ/CBA high/very high) and tier‑1 reports.
+Volume‑based dashboards (e.g., “how much data is in Oracle vs SQL Server”) are helpful but secondary to use‑case criticality.
+4. Requirements & Process Expectations
+Formal intake:
+
+All of this work should go through the SSDIE / I&E intake process.
+Architects are expected to:
+Take these requirements.
+Design one or more solution patterns.
+Work with Daryl’s and John’s teams to implement.
+Security & risk considerations:
+
+Only metadata is in scope (schemas/tables/columns, not data values).
+However, schema can still reveal sensitivity (e.g., presence of PII tables), so:
+Security and governance reviews are required.
+Access to metadata must follow least privilege.
+Some level of risk acceptance is expected for speed (Project Brisk/top‑7 bank priorities).
+Data Compass expects a push target:
+
+Data Compass team is:
+Building a metadata lake.
+Expecting backend/platform teams to push schema/system catalog outputs there.
+Architects must specify:
+The formats, interfaces, and patterns for this push.
+How that integrates with Data Compass ingestion.
+5. Concrete Next Steps (for Architecture & Platform Teams)
+Architects and platform teams should now:
+
+Define standard patterns per platform family
+
+Example patterns:
+Oracle via OEM → export schema catalog → metadata lake.
+SQL Server via SCOM or similar → schema catalog → metadata lake.
+Databricks/Rahona via Dynatrace connector (or similar) → metadata export → metadata lake.
+AWS contact center SaaS → API‑based schema export → metadata lake.
+Each pattern should describe:
+Connection/auth model (reusing existing accounts where possible).
+Queries or API calls to retrieve system/catalog metadata.
+Export mechanism and format.
+Validate tool capabilities
+
+Confirm with vendors / teams:
+What Dynatrace, OEM, SCOM, etc., can expose in terms of schema/system catalog.
+Whether they can be configured to export the required fields (db/schema/table/columns/data types, etc.).
+Propose an MVP solution design
+
+Select a small number of platforms and use cases:
+E.g., one on‑prem RDBMS, one cloud platform (Databricks), one SaaS case (contact center).
+Design an end‑to‑end flow:
+Platform → observability tool → metadata export → metadata lake → Data Compass.
+Include timelines, risks, and dependencies for SSDIE intake.
+Include Data Compass in design sessions
+
+Data Compass/Data Governance (Richmond, Valeri, Alex, etc.) want to be:
+At least “fly on the wall” in architecture/design sessions.
+Able to review planned patterns and confirm they meet catalog requirements.
