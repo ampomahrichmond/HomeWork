@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Retention Attestation · Office of Data Governance</title>
+<style>
+  :root{
+    --ej-yellow:#FFC72C; --ej-yellow-deep:#E6AE12; --ej-yellow-soft:#FFF4D1;
+    --charcoal:#2D2D2D; --charcoal-2:#4A4A4A; --charcoal-3:#767676;
+    --line:#E3E1DB; --surface:#FFFFFF; --canvas:#F5F4F0;
+    --ok:#3E7C4A; --warn:#B5541B;
+    --display:"Palatino Linotype","Palatino","Book Antiqua",Georgia,serif;
+    --body:Calibri,"Segoe UI",Helvetica,Arial,sans-serif;
+    --r:14px; --shadow:0 1px 2px rgba(45,45,45,.05),0 10px 30px -12px rgba(45,45,45,.15);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
+  body{font-family:var(--body);color:var(--charcoal);background:var(--canvas);font-size:15px;line-height:1.45}
+
+  /* Masthead */
+  .masthead{background:var(--charcoal);color:#fff;padding:0 40px}
+  .masthead-inner{max-width:1360px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:64px}
+  .brand{display:flex;align-items:center;gap:14px}
+  .brand-mark{width:34px;height:34px;background:var(--ej-yellow);border-radius:8px;display:grid;place-items:center;font-family:var(--display);font-weight:700;color:var(--charcoal);font-size:17px;letter-spacing:-.5px}
+  .brand span{font-family:var(--display);font-size:17px;letter-spacing:.3px}
+  .brand small{display:block;font-family:var(--body);font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:#BEBEBE}
+  .masthead-meta{display:flex;gap:28px;font-size:12.5px;color:#C8C8C8}
+  .masthead-meta b{color:#fff;font-weight:600}
+  .cycle select{font:inherit;font-size:12.5px;font-weight:600;color:#fff;background:#3A3A3A;border:1px solid #5A5A5A;border-radius:8px;padding:5px 28px 5px 10px;margin-left:6px;cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23FFC72C' stroke-width='1.8' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center}
+  .cycle select:focus{outline:none;border-color:var(--ej-yellow);box-shadow:0 0 0 3px rgba(255,199,44,.3)}
+  .yellow-rule{height:5px;background:var(--ej-yellow)}
+
+  /* Hero */
+  .hero{max-width:1360px;margin:0 auto;padding:44px 40px 26px;display:grid;grid-template-columns:1.4fr 1fr;gap:40px;align-items:end}
+  .eyebrow{font-size:11.5px;letter-spacing:2.2px;text-transform:uppercase;color:var(--charcoal-3);font-weight:600;display:flex;align-items:center;gap:10px}
+  .eyebrow::before{content:"";width:22px;height:2px;background:var(--ej-yellow)}
+  .hero h1{font-family:var(--display);font-weight:400;font-size:44px;line-height:1.05;margin:14px 0 12px;letter-spacing:-.4px}
+  .hero h1 em{font-style:italic;color:var(--charcoal-2)}
+  .hero p{color:var(--charcoal-2);max-width:56ch;font-size:15.5px}
+  .record-id{justify-self:end;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 20px;box-shadow:var(--shadow);min-width:300px}
+  .record-id dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:13px}
+  .record-id dt{color:var(--charcoal-3)} .record-id dd{font-weight:600;text-align:right}
+  .record-id .num{font-family:var(--display);font-size:22px;letter-spacing:.5px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+  .pill{font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;padding:4px 10px;border-radius:999px;background:var(--ej-yellow-soft);color:#8A6300;border:1px solid #F3D982}
+
+  /* Layout */
+  .wrap{max-width:1360px;margin:0 auto;padding:12px 40px 80px;display:grid;grid-template-columns:230px 1fr 320px;gap:32px;align-items:start}
+
+  /* Rail */
+  .rail{position:sticky;top:24px}
+  .rail-title{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--charcoal-3);font-weight:700;margin-bottom:14px}
+  .rail a{display:flex;align-items:center;gap:12px;padding:10px 10px;border-radius:10px;color:var(--charcoal-2);text-decoration:none;font-size:14px;position:relative}
+  .rail a:hover{background:#fff}
+  .rail a.active{background:#fff;color:var(--charcoal);font-weight:600;box-shadow:var(--shadow)}
+  .rail .dot{width:22px;height:22px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-size:11px;font-weight:700;color:var(--charcoal-3);background:#fff;flex:none;transition:all .25s}
+  .rail a.done .dot{background:var(--ej-yellow);border-color:var(--ej-yellow);color:var(--charcoal)}
+  .rail a.done .dot::after{content:"✓"}
+  .rail a.done .dot span{display:none}
+  .rail .count{margin-left:auto;font-size:11px;color:var(--charcoal-3);font-variant-numeric:tabular-nums}
+  .rail-meter{margin-top:18px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px}
+  .rail-meter .lbl{display:flex;justify-content:space-between;font-size:12px;color:var(--charcoal-3);margin-bottom:8px}
+  .rail-meter .lbl b{color:var(--charcoal);font-variant-numeric:tabular-nums}
+  .bar{height:6px;background:var(--line);border-radius:99px;overflow:hidden}
+  .bar i{display:block;height:100%;width:0;background:var(--ej-yellow);border-radius:99px;transition:width .35s ease}
+
+  /* Sections */
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);margin-bottom:22px;overflow:hidden;scroll-margin-top:24px}
+  .card-head{display:flex;align-items:baseline;justify-content:space-between;padding:22px 28px 16px;border-bottom:1px solid var(--line)}
+  .card-head h2{font-family:var(--display);font-weight:400;font-size:23px;letter-spacing:-.2px}
+  .card-head h2 b{font-family:var(--body);font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--charcoal-3);display:block;margin-bottom:4px}
+  .card-head .hint{font-size:12.5px;color:var(--charcoal-3);max-width:34ch;text-align:right}
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px 24px;padding:22px 28px 26px}
+  .grid .full{grid-column:1/-1}
+  .field label{display:block;font-size:12.5px;font-weight:600;color:var(--charcoal-2);margin-bottom:6px;letter-spacing:.2px}
+  .field label .req{color:var(--warn);margin-left:3px}
+  .field label .help{font-weight:400;color:var(--charcoal-3);margin-left:6px}
+  .field input,.field select,.field textarea{width:100%;font:inherit;font-size:14.5px;color:var(--charcoal);background:#FCFCFB;border:1px solid var(--line);border-radius:10px;padding:11px 13px;transition:border-color .15s,box-shadow .15s,background .15s;appearance:none;-webkit-appearance:none}
+  .field textarea{min-height:76px;resize:vertical}
+  .field select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%234A4A4A' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 13px center;padding-right:36px;cursor:pointer}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--ej-yellow-deep);box-shadow:0 0 0 3px rgba(255,199,44,.32);background:#fff}
+  .field.filled input,.field.filled select,.field.filled textarea{background:#fff;border-color:#CFCBC2}
+  .field input::placeholder,.field textarea::placeholder{color:#A7A7A7}
+
+  /* Segmented yes/no */
+  .seg{display:flex;background:#F0EEE8;border-radius:10px;padding:3px;gap:3px}
+  .seg label{flex:1;margin:0!important;cursor:pointer}
+  .seg input{position:absolute;opacity:0;width:0;height:0}
+  .seg span{display:block;text-align:center;padding:9px 0;border-radius:8px;font-size:14px;font-weight:600;color:var(--charcoal-3);transition:all .18s}
+  .seg input:checked+span{background:var(--charcoal);color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.15)}
+  .seg input:focus-visible+span{box-shadow:0 0 0 3px rgba(255,199,44,.5)}
+  .seg.affirm input:checked+span{background:var(--ej-yellow);color:var(--charcoal)}
+
+  /* Status chips */
+  .status-row{display:flex;gap:8px;flex-wrap:wrap}
+  .status-row label{flex:1;min-width:120px;margin:0!important;cursor:pointer}
+  .status-row input{position:absolute;opacity:0;width:0;height:0}
+  .status-row span{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:13.5px;font-weight:600;color:var(--charcoal-2);background:#FCFCFB;transition:all .18s}
+  .status-row span::before{content:"";width:8px;height:8px;border-radius:50%;background:#CFCBC2}
+  .status-row input:checked+span{border-color:var(--charcoal);background:var(--charcoal);color:#fff}
+  .status-row input:checked+span::before{background:var(--ej-yellow)}
+  .status-row input:focus-visible+span{box-shadow:0 0 0 3px rgba(255,199,44,.5)}
+
+  /* Record / Non-record big toggle */
+  .rec-toggle{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .rec-toggle label{margin:0!important;cursor:pointer}
+  .rec-toggle input{position:absolute;opacity:0;width:0;height:0}
+  .rec-toggle .opt{border:1.5px solid var(--line);border-radius:12px;padding:14px 16px;background:#FCFCFB;transition:all .18s;height:100%}
+  .rec-toggle .opt strong{font-family:var(--display);font-size:18px;display:block;font-weight:400;margin-bottom:3px}
+  .rec-toggle .opt small{color:var(--charcoal-3);font-size:12.5px;line-height:1.35;display:block}
+  .rec-toggle input:checked+.opt{border-color:var(--ej-yellow-deep);background:var(--ej-yellow-soft);box-shadow:inset 0 0 0 1px var(--ej-yellow-deep)}
+  .rec-toggle input:focus-visible+.opt{box-shadow:0 0 0 3px rgba(255,199,44,.5)}
+
+  /* Attestation panel */
+  .attest{position:sticky;top:24px;background:var(--charcoal);color:#fff;border-radius:var(--r);padding:26px 24px;box-shadow:0 20px 40px -20px rgba(0,0,0,.5)}
+  .attest .eyebrow{color:#BDBDBD}
+  .attest h3{font-family:var(--display);font-weight:400;font-size:24px;margin:10px 0 14px;line-height:1.15}
+  .seal{border:1px dashed #5A5A5A;border-radius:12px;padding:16px;margin:8px 0 18px;text-align:center;transition:all .3s}
+  .seal .k{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#9A9A9A}
+  .seal .v{font-family:var(--display);font-size:26px;margin-top:4px;color:#fff}
+  .seal.record{border-style:solid;border-color:var(--ej-yellow);background:rgba(255,199,44,.08)}
+  .seal.record .v{color:var(--ej-yellow)}
+  .seal.nonrecord{border-style:solid;border-color:#8E8E8E}
+  .attest ul{list-style:none;display:grid;gap:9px;margin:4px 0 18px}
+  .attest li{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:#D6D6D6;line-height:1.35}
+  .attest li i{flex:none;width:16px;height:16px;border-radius:50%;border:1.5px solid #6E6E6E;margin-top:1px;display:grid;place-items:center;font-size:10px;font-style:normal;transition:all .25s}
+  .attest li.ok i{background:var(--ej-yellow);border-color:var(--ej-yellow);color:var(--charcoal)}
+  .attest li.ok i::after{content:"✓"}
+  .attest .sig{margin-top:6px}
+  .attest .sig label{font-size:12px;color:#BDBDBD;display:block;margin-bottom:6px}
+  .attest .sig input{width:100%;font:inherit;font-size:14px;padding:10px 12px;border-radius:9px;border:1px solid #5A5A5A;background:#3A3A3A;color:#fff;margin-bottom:10px}
+  .attest .sig input:focus{outline:none;border-color:var(--ej-yellow);box-shadow:0 0 0 3px rgba(255,199,44,.3)}
+  .chk{display:flex;gap:10px;align-items:flex-start;font-size:12.5px;color:#D6D6D6;margin:6px 0 16px;cursor:pointer;line-height:1.4}
+  .chk input{accent-color:var(--ej-yellow);margin-top:3px;flex:none;width:15px;height:15px}
+  .btn{width:100%;font:inherit;font-weight:700;font-size:15px;padding:13px;border-radius:10px;border:none;cursor:pointer;transition:all .18s;letter-spacing:.2px}
+  .btn-primary{background:var(--ej-yellow);color:var(--charcoal)}
+  .btn-primary:hover{background:var(--ej-yellow-deep)}
+  .btn-primary:disabled{background:#4E4E4E;color:#8E8E8E;cursor:not-allowed}
+  .field.invalid input,.field.invalid select,.field.invalid textarea,.field.invalid .seg,.field.invalid .status-row span,.field.invalid .rec-toggle .opt{border-color:var(--warn)!important;box-shadow:0 0 0 3px rgba(181,84,27,.18)}
+  .attest .sig input.invalid,.attest .sig select.invalid{border-color:var(--ej-yellow)!important}
+  .toast.err b{color:#FF9B6A}
+  .btn-ghost{background:transparent;color:#D6D6D6;border:1px solid #5A5A5A;margin-top:8px}
+  .btn-ghost:hover{border-color:#fff;color:#fff}
+  .btn:focus-visible{outline:3px solid rgba(255,199,44,.6);outline-offset:2px}
+  .attest-foot{margin-top:16px;font-size:11.5px;color:#9A9A9A;line-height:1.4}
+
+  /* Toast */
+  .toast{position:fixed;bottom:28px;left:50%;transform:translate(-50%,20px);background:var(--charcoal);color:#fff;padding:14px 20px;border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.3);font-size:14px;display:flex;gap:12px;align-items:center;opacity:0;pointer-events:none;transition:all .3s}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+  .toast b{color:var(--ej-yellow)}
+
+  @media(max-width:1180px){.wrap{grid-template-columns:1fr 300px}.rail{display:none}}
+  @media(max-width:880px){.wrap{grid-template-columns:1fr;padding:12px 20px 60px}.attest{position:static}.hero{grid-template-columns:1fr;padding:32px 20px 16px}.record-id{justify-self:start}.grid{grid-template-columns:1fr;padding:18px 20px}.card-head{flex-direction:column;gap:6px;padding:18px 20px 12px}.card-head .hint{text-align:left}.masthead{padding:0 20px}.masthead-meta{display:none}.hero h1{font-size:34px}}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <div class="brand">
+      <div class="brand-mark">EJ</div>
+      <div><span>Office of Data Governance</span><small>Data Retention &amp; Disposition</small></div>
+    </div>
+    <div class="masthead-meta" style="align-items:center">
+      <div>Application <b>Data Retention Attestation</b></div>
+      <div class="cycle">Cycle
+        <select id="cycle" aria-label="Attestation cycle">
+          <option value="T1">T1 · Jan–Apr 2026</option>
+          <option value="T2" selected>T2 · May–Aug 2026</option>
+          <option value="T3">T3 · Sep–Dec 2026</option>
+        </select></div>
+      <div>Deadline <b id="deadline">Aug 31, 2026</b></div>
+    </div>
+  </div>
+</header>
+<div class="yellow-rule"></div>
+
+<section class="hero">
+  <div>
+    <div class="eyebrow">Data Retention Attestation</div>
+    <h1>Attest to the retention and disposition <em>of this data asset.</em></h1>
+    <p>Data Owners and Custodians confirm how the asset is identified, governed, stored and disposed of. Each section is saved as you go; the attestation panel unlocks once every required field is complete.</p>
+  </div>
+  <div class="record-id">
+    <div class="num"><span>DRA-2026-00417</span><span class="pill">Open</span></div>
+    <dl>
+      <dt>Cycle</dt><dd id="cycleLbl">T2 · May–Aug 2026</dd>
+      <dt>Assigned to</dt><dd>Data Custodian</dd>
+      <dt>Created</dt><dd>Aug 24, 2026</dd>
+      <dt>Last saved</dt><dd id="lastSaved">Not yet saved</dd>
+    </dl>
+  </div>
+</section>
+
+<div class="wrap">
+
+  <!-- RAIL -->
+  <nav class="rail" aria-label="Form sections">
+    <div class="rail-title">Sections</div>
+    <a href="#s1" data-sec="s1"><span class="dot"><span>1</span></span>Asset identification<span class="count"></span></a>
+    <a href="#s2" data-sec="s2"><span class="dot"><span>2</span></span>Data governance<span class="count"></span></a>
+    <a href="#s3" data-sec="s3"><span class="dot"><span>3</span></span>Asset management<span class="count"></span></a>
+    <a href="#s4" data-sec="s4"><span class="dot"><span>4</span></span>Disposition<span class="count"></span></a>
+    <div class="rail-meter">
+      <div class="lbl"><span>Completion</span><b id="pct">0%</b></div>
+      <div class="bar"><i id="barFill"></i></div>
+    </div>
+  </nav>
+
+  <!-- FORM -->
+  <main>
+    <form id="dbor" novalidate>
+
+      <section class="card" id="s1" data-sec="s1">
+        <div class="card-head">
+          <h2><b>Section 1</b>Data asset identification</h2>
+          <div class="hint">Name the asset as it appears in the enterprise inventory and who maintains it day to day.</div>
+        </div>
+        <div class="grid">
+          <div class="field full">
+            <label for="assetName">Data / Information name<span class="req">*</span><span class="help">as registered in the data catalogue</span></label>
+            <input id="assetName" name="assetName" required placeholder="e.g., Client Account Master — Brokerage">
+          </div>
+          <div class="field full">
+            <label for="custodian">Data Custodian<span class="req">*</span></label>
+            <input id="custodian" name="custodian" required placeholder="Name · Title · Department">
+          </div>
+          <div class="field full">
+            <label>DRDC status<span class="req">*</span><span class="help">Data Retention &amp; Disposition Catalogue — retention schedule status</span></label>
+            <div class="status-row" role="radiogroup">
+              <label><input type="radio" name="drdc" value="Draft" required><span>Draft</span></label>
+              <label><input type="radio" name="drdc" value="Under Review"><span>Under Review</span></label>
+              <label><input type="radio" name="drdc" value="Approved"><span>Approved</span></label>
+              <label><input type="radio" name="drdc" value="Published"><span>Published</span></label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" id="s2" data-sec="s2">
+        <div class="card-head">
+          <h2><b>Section 2</b>Data governance</h2>
+          <div class="hint">Where the asset sits in the business and who is accountable for it.</div>
+        </div>
+        <div class="grid">
+          <div class="field">
+            <label for="segment">Business segment<span class="req">*</span></label>
+            <select id="segment" name="segment" required>
+              <option value="">Select a segment</option>
+              <option>Branch &amp; Client Services</option>
+              <option>Wealth Management</option>
+              <option>Operations</option>
+              <option>Finance</option>
+              <option>Technology</option>
+              <option>Legal, Risk &amp; Compliance</option>
+              <option>Human Resources</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="lob">Line of business (LOB)<span class="req">*</span></label>
+            <input id="lob" name="lob" required placeholder="e.g., Advisory Solutions">
+          </div>
+          <div class="field full">
+            <label for="dbaa">Defined business activity area<span class="req">*</span><span class="help">per the retention schedule taxonomy</span></label>
+            <input id="dbaa" name="dbaa" required placeholder="e.g., Client Onboarding &amp; Account Opening">
+          </div>
+          <div class="field">
+            <label for="owner">Data Owner<span class="req">*</span></label>
+            <input id="owner" name="owner" required placeholder="Name · Title">
+          </div>
+          <div class="field">
+            <label for="steward">Data Steward<span class="req">*</span></label>
+            <input id="steward" name="steward" required placeholder="Name · Title">
+          </div>
+        </div>
+      </section>
+
+      <section class="card" id="s3" data-sec="s3">
+        <div class="card-head">
+          <h2><b>Section 3</b>Data asset management</h2>
+          <div class="hint">Classification, where the asset lives, and the schedule that governs how long it stays.</div>
+        </div>
+        <div class="grid">
+          <div class="field full">
+            <label>Record / Non-record<span class="req">*</span></label>
+            <div class="rec-toggle" role="radiogroup">
+              <label><input type="radio" name="recordType" value="Record" required>
+                <div class="opt"><strong>Record</strong><small>Evidence of a business activity or decision. Subject to the retention schedule and legal hold.</small></div></label>
+              <label><input type="radio" name="recordType" value="Non-Record">
+                <div class="opt"><strong>Non-record</strong><small>Transitory, convenience or reference data with no evidentiary value. Dispose when no longer useful.</small></div></label>
+            </div>
+          </div>
+          <div class="field">
+            <label>Data stored on third-party systems<span class="req">*</span></label>
+            <div class="seg" role="radiogroup">
+              <label><input type="radio" name="thirdParty" value="Yes" required><span>Yes</span></label>
+              <label><input type="radio" name="thirdParty" value="No"><span>No</span></label>
+            </div>
+          </div>
+          <div class="field">
+            <label for="media">Media type<span class="req">*</span></label>
+            <select id="media" name="media" required>
+              <option value="">Select media type</option>
+              <option>Structured — database / table</option>
+              <option>Unstructured — documents / files</option>
+              <option>Semi-structured — logs / JSON / XML</option>
+              <option>Email &amp; messaging</option>
+              <option>Physical — paper / microfilm</option>
+              <option>Audio / video</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="source">Data source<span class="req">*</span></label>
+            <input id="source" name="source" required placeholder="System of origin, e.g., Salesforce, Oracle CRM">
+          </div>
+          <div class="field">
+            <label for="storage">Media storage location<span class="req">*</span></label>
+            <input id="storage" name="storage" required placeholder="e.g., Snowflake · PROD_CLIENT · On-prem SAN">
+          </div>
+          <div class="field">
+            <label for="schedule">Retention schedule<span class="req">*</span><span class="help">schedule ID and period</span></label>
+            <input id="schedule" name="schedule" required placeholder="e.g., RS-CLI-014 · 7 years">
+          </div>
+          <div class="field">
+            <label for="trigger">Retention schedule trigger<span class="req">*</span></label>
+            <select id="trigger" name="trigger" required>
+              <option value="">Select trigger event</option>
+              <option>Creation date</option>
+              <option>Account closure</option>
+              <option>End of client relationship</option>
+              <option>Contract termination</option>
+              <option>Fiscal year end</option>
+              <option>Employee separation</option>
+              <option>Superseded / obsolete</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" id="s4" data-sec="s4">
+        <div class="card-head">
+          <h2><b>Section 4</b>Disposition</h2>
+          <div class="hint">Confirm that the asset can be disposed of at end of retention and that disposal can be evidenced.</div>
+        </div>
+        <div class="grid">
+          <div class="field">
+            <label>Is disposition for this data asset in place?<span class="req">*</span></label>
+            <div class="seg affirm" role="radiogroup">
+              <label><input type="radio" name="dispInPlace" value="Yes" required><span>Yes</span></label>
+              <label><input type="radio" name="dispInPlace" value="No"><span>No</span></label>
+            </div>
+          </div>
+          <div class="field">
+            <label>Ability to dispose data<span class="req">*</span></label>
+            <div class="seg affirm" role="radiogroup">
+              <label><input type="radio" name="canDispose" value="Yes" required><span>Yes</span></label>
+              <label><input type="radio" name="canDispose" value="No"><span>No</span></label>
+            </div>
+          </div>
+          <div class="field">
+            <label>Data is compliant<span class="req">*</span><span class="help">with the retention schedule</span></label>
+            <div class="seg affirm" role="radiogroup">
+              <label><input type="radio" name="compliant" value="Yes" required><span>Yes</span></label>
+              <label><input type="radio" name="compliant" value="No"><span>No</span></label>
+            </div>
+          </div>
+          <div class="field">
+            <label>Ability to produce evidence of disposal<span class="req">*</span></label>
+            <div class="seg affirm" role="radiogroup">
+              <label><input type="radio" name="evidence" value="Yes" required><span>Yes</span></label>
+              <label><input type="radio" name="evidence" value="No"><span>No</span></label>
+            </div>
+          </div>
+          <div class="field full">
+            <label for="notes">Exceptions or remediation notes<span class="help">required if any answer above is No</span></label>
+            <textarea id="notes" name="notes" placeholder="Describe the gap, the remediation owner and the target date."></textarea>
+          </div>
+        </div>
+      </section>
+
+    </form>
+  </main>
+
+  <!-- ATTESTATION PANEL -->
+  <aside class="attest">
+    <div class="eyebrow">Attestation</div>
+    <h3>Sign and submit</h3>
+    <div class="seal" id="seal">
+      <div class="k">Classification</div>
+      <div class="v" id="sealVal">Not yet classified</div>
+    </div>
+    <ul id="checks">
+      <li data-sec="s1"><i></i>Asset identified and DRDC status set</li>
+      <li data-sec="s2"><i></i>Ownership and stewardship confirmed</li>
+      <li data-sec="s3"><i></i>Storage and retention schedule recorded</li>
+      <li data-sec="s4"><i></i>Disposition capability confirmed</li>
+    </ul>
+    <div class="sig">
+      <label for="attName">Attested by</label>
+      <input id="attName" placeholder="Full name">
+      <label for="attRole">Role</label>
+      <select id="attRole" style="width:100%;font:inherit;font-size:14px;padding:10px 12px;border-radius:9px;border:1px solid #5A5A5A;background:#3A3A3A;color:#fff;margin-bottom:10px">
+        <option value="">Select role</option>
+        <option>Data Owner</option>
+        <option>Data Custodian</option>
+        <option>Data Steward</option>
+      </select>
+    </div>
+    <label class="chk"><input type="checkbox" id="attConfirm">I confirm the information above is accurate and complete to the best of my knowledge, and that this asset is managed in line with the Edward Jones Data Retention &amp; Disposition Policy.</label>
+    <button class="btn btn-primary" id="submitBtn" type="button">Submit attestation</button>
+    <button class="btn btn-ghost" id="saveBtn" type="button">Save draft</button>
+    <div class="attest-foot">Submitting routes the record to the Data Owner for countersignature and locks the attestation for this cycle.</div>
+  </aside>
+</div>
+
+<div class="toast" id="toast"><b>Saved</b><span id="toastMsg"></span></div>
+
+<script>
+(function(){
+  const form=document.getElementById('dbor');
+  const secs=['s1','s2','s3','s4'];
+  const submitBtn=document.getElementById('submitBtn');
+  const toast=document.getElementById('toast'), toastMsg=document.getElementById('toastMsg');
+
+  function requiredIn(sec){
+    const names=new Set();
+    document.querySelectorAll('#'+sec+' [required]').forEach(el=>names.add(el.name));
+    return [...names];
+  }
+  function isFilled(name){
+    const els=form.querySelectorAll('[name="'+name+'"]');
+    if(els[0].type==='radio') return [...els].some(e=>e.checked);
+    return els[0].value.trim()!=='';
+  }
+  function update(){
+    let total=0,done=0;
+    secs.forEach(sec=>{
+      const req=requiredIn(sec); const d=req.filter(isFilled).length;
+      total+=req.length; done+=d;
+      const link=document.querySelector('.rail a[data-sec="'+sec+'"]');
+      link.querySelector('.count').textContent=d+'/'+req.length;
+      link.classList.toggle('done',d===req.length);
+      document.querySelector('#checks li[data-sec="'+sec+'"]').classList.toggle('ok',d===req.length);
+    });
+    const pct=Math.round(done/total*100);
+    document.getElementById('pct').textContent=pct+'%';
+    document.getElementById('barFill').style.width=pct+'%';
+
+    // filled styling
+    form.querySelectorAll('.field').forEach(f=>{
+      const el=f.querySelector('input:not([type=radio]),select,textarea');
+      if(el) f.classList.toggle('filled',el.value.trim()!=='');
+    });
+
+    // seal
+    const rt=form.querySelector('[name="recordType"]:checked');
+    const seal=document.getElementById('seal'), sv=document.getElementById('sealVal');
+    seal.classList.remove('record','nonrecord');
+    if(rt){ sv.textContent=rt.value; seal.classList.add(rt.value==='Record'?'record':'nonrecord'); }
+    else sv.textContent='Not yet classified';
+
+    // notes required if any disposition No
+    const anyNo=['dispInPlace','canDispose','compliant','evidence'].some(n=>{const c=form.querySelector('[name="'+n+'"]:checked');return c&&c.value==='No';});
+    const notesOk=!anyNo||form.notes.value.trim()!=='';
+
+    window._draState={done,total,notesOk,anyNo};
+  }
+  document.addEventListener('input',update);
+  document.addEventListener('change',update);
+  update();
+
+  function showToast(msg,err){toastMsg.textContent=msg;toast.classList.toggle('err',!!err);toast.querySelector('b').textContent=err?'Check':'Saved';toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),3200);}
+  function stamp(){document.getElementById('lastSaved').textContent=new Date().toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});}
+  document.getElementById('saveBtn').addEventListener('click',()=>{stamp();showToast('Draft saved for DRA-2026-00417.');});
+  function validate(){
+    form.querySelectorAll('.field.invalid').forEach(f=>f.classList.remove('invalid'));
+    document.querySelectorAll('.attest .invalid').forEach(e=>e.classList.remove('invalid'));
+    let first=null, missing=0;
+    form.querySelectorAll('.field').forEach(f=>{
+      const req=f.querySelector('[required]'); if(!req) return;
+      if(!isFilled(req.name)){f.classList.add('invalid');missing++;first=first||f;}
+    });
+    if(window._draState.anyNo&&form.notes.value.trim()===''){const f=form.notes.closest('.field');f.classList.add('invalid');missing++;first=first||f;}
+    const n=document.getElementById('attName'),r=document.getElementById('attRole'),c=document.getElementById('attConfirm');
+    let sigMissing=0;
+    if(!n.value.trim()){n.classList.add('invalid');sigMissing++;}
+    if(!r.value){r.classList.add('invalid');sigMissing++;}
+    if(!c.checked){c.closest('.chk').style.color='var(--ej-yellow)';sigMissing++;} else c.closest('.chk').style.color='';
+    if(missing){first.scrollIntoView({behavior:'smooth',block:'center'});showToast(missing+' required field'+(missing>1?'s':'')+' still need'+(missing>1?'':'s')+' a response.',true);return false;}
+    if(sigMissing){showToast('Enter your name, role and tick the confirmation to attest.',true);return false;}
+    return true;
+  }
+  submitBtn.addEventListener('click',()=>{
+    if(!validate()) return;
+    stamp();
+    document.querySelector('.pill').textContent='Attested';
+    submitBtn.textContent='Attestation submitted';submitBtn.disabled=true;
+    form.querySelectorAll('input,select,textarea').forEach(e=>e.disabled=true);
+    document.querySelectorAll('.attest input,.attest select').forEach(e=>e.disabled=true);
+    toast.querySelector('b').textContent='Submitted';showToast('Attestation submitted and routed to the Data Owner.');toast.querySelector('b').textContent='Submitted';
+  });
+
+  // cycle → deadline
+  const cyc=document.getElementById('cycle');
+  const cycles={T1:{lbl:'T1 · Jan–Apr 2026',dl:'Apr 30, 2026'},T2:{lbl:'T2 · May–Aug 2026',dl:'Aug 31, 2026'},T3:{lbl:'T3 · Sep–Dec 2026',dl:'Dec 31, 2026'}};
+  function setCycle(){document.getElementById('deadline').textContent=cycles[cyc.value].dl;document.getElementById('cycleLbl').textContent=cycles[cyc.value].lbl;}
+  cyc.addEventListener('change',setCycle);setCycle();
+
+  // rail active state
+  const links=document.querySelectorAll('.rail a');
+  const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){links.forEach(l=>l.classList.toggle('active',l.dataset.sec===e.target.dataset.sec));}})},{rootMargin:'-30% 0px -60% 0px'});
+  secs.forEach(s=>io.observe(document.getElementById(s)));
+})();
+</script>
+</body>
+</html>
