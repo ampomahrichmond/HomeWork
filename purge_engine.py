@@ -715,14 +715,36 @@ function filt(sev, btn) {{
 # 7. MAIN
 # ----------------------------------------------------------------------------
 
+def browse_for_folder() -> str | None:
+    """Open a native folder-picker dialog and return the chosen path (or None if cancelled)."""
+    import tkinter as tk
+    from tkinter import filedialog
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    path = filedialog.askdirectory(title="Select folder containing purge request spreadsheets")
+    root.destroy()
+    return path or None
+
+
 def main():
     ap = argparse.ArgumentParser(description="Analyze a folder of purge-request spreadsheets and build an HTML dashboard.")
-    ap.add_argument("folder", help="Folder containing the purge request .xlsx/.csv files")
+    ap.add_argument("folder", nargs="?", default=None,
+                     help="Folder containing the purge request .xlsx/.csv files (omit to pick via a browse dialog)")
     ap.add_argument("-o", "--output", default="purge_dashboard.html", help="Output HTML file (default: purge_dashboard.html)")
     ap.add_argument("--as-of", default=None, help="Override 'today' for overdue checks, e.g. 2026-08-31")
     args = ap.parse_args()
 
-    folder = Path(args.folder).expanduser()
+    if args.folder:
+        folder = Path(args.folder).expanduser()
+    else:
+        chosen = browse_for_folder()
+        if not chosen:
+            print("No folder selected.", file=sys.stderr)
+            sys.exit(1)
+        folder = Path(chosen)
+
     if not folder.is_dir():
         print(f"Not a folder: {folder}", file=sys.stderr)
         sys.exit(1)
