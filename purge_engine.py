@@ -126,6 +126,18 @@ def map_header(header) -> str | None:
 # 2. FILE READING
 # ----------------------------------------------------------------------------
 
+def detect_header_row(raw: pd.DataFrame) -> int:
+    """Sheets often have title/banner rows above the real headers. Scan the first
+    15 rows; the header row is the one whose cells map to the most distinct
+    canonical fields. Returns the row index, or -1 if nothing looks like headers."""
+    best_idx, best_score = -1, 0
+    for i in range(min(len(raw), 15)):
+        seen = {map_header(c) for c in raw.iloc[i] if map_header(c)}
+        if len(seen) > best_score:
+            best_score, best_idx = len(seen), i
+    return best_idx if best_score >= 3 else -1
+
+
 def read_folder(folder: Path) -> tuple[pd.DataFrame, list[dict]]:
     """Read every spreadsheet/CSV in the folder; return combined df + file log."""
     frames, file_log = [], []
@@ -139,9 +151,9 @@ def read_folder(folder: Path) -> tuple[pd.DataFrame, list[dict]]:
     for f in files:
         try:
             if f.suffix.lower() == ".csv":
-                sheets = {"csv": pd.read_csv(f, dtype=str)}
+                sheets = {"csv": pd.read_csv(f, dtype=str, header=None)}
             else:
-                sheets = pd.read_excel(f, sheet_name=None, dtype=str)
+                sheets = pd.read_excel(f, sheet_name=None, dtype=str, header=None)
         except Exception as e:
             file_log.append({"file": f.name, "sheet": "-", "rows": 0, "mapped": [], "unmapped": [], "error": str(e)})
             continue
@@ -149,29 +161,40 @@ def read_folder(folder: Path) -> tuple[pd.DataFrame, list[dict]]:
         for sheet_name, raw in sheets.items():
             if raw is None or raw.empty:
                 continue
-            raw = raw.dropna(how="all").dropna(axis=1, how="all")
+            raw = raw.dropna(how="all").dropna(axis=1, how="all").reset_index(drop=True)
             if raw.empty:
                 continue
 
-            mapped_cols, unmapped, out = {}, [], {}
-            for col in raw.columns:
-                canon = map_header(col)
-                if canon and canon not in out:  # first match wins
-                    out[canon] = raw[col]
-                    mapped_cols[col] = canon
-                elif not canon:
-                    unmapped.append(str(col))
-
-            if "request_id" not in out and len(out) < 3:
-                # Probably not a purge tracker sheet (e.g., a notes tab) — skip it
+            h_idx = detect_header_row(raw)
+            if h_idx == -1:
+                file_log.append({"file": f.name, "sheet": sheet_name, "rows": 0, "mapped": [],
+                                 "unmapped": [], "error": "No recognizable header row in first 15 rows — sheet skipped"})
                 continue
 
+            headers = [("" if pd.isna(h) else str(h).strip()) for h in raw.iloc[h_idx]]
+            body = raw.iloc[h_idx + 1:].reset_index(drop=True)
+            body.columns = range(len(headers))
+
+            mapped_cols, unmapped, out = {}, [], {}
+            for i, col in enumerate(headers):
+                if not col:
+                    continue
+                canon = map_header(col)
+                if canon and canon not in out:  # first match wins
+                    out[canon] = body[i]
+                    mapped_cols[col] = canon
+                elif not canon:
+                    unmapped.append(col)
+
             df = pd.DataFrame(out)
+            df = df.dropna(how="all")  # drop rows empty on all mapped columns
+            if df.empty:
+                continue
             df["source_file"] = f.name
             df["source_sheet"] = sheet_name
             frames.append(df)
             file_log.append({
-                "file": f.name, "sheet": sheet_name, "rows": len(df),
+                "file": f.name, "sheet": f"{sheet_name} (headers on row {h_idx + 1})", "rows": len(df),
                 "mapped": sorted(set(mapped_cols.values())), "unmapped": unmapped, "error": None,
             })
 
@@ -715,36 +738,14 @@ function filt(sev, btn) {{
 # 7. MAIN
 # ----------------------------------------------------------------------------
 
-def browse_for_folder() -> str | None:
-    """Open a native folder-picker dialog and return the chosen path (or None if cancelled)."""
-    import tkinter as tk
-    from tkinter import filedialog
-
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes("-topmost", True)
-    path = filedialog.askdirectory(title="Select folder containing purge request spreadsheets")
-    root.destroy()
-    return path or None
-
-
 def main():
     ap = argparse.ArgumentParser(description="Analyze a folder of purge-request spreadsheets and build an HTML dashboard.")
-    ap.add_argument("folder", nargs="?", default=None,
-                     help="Folder containing the purge request .xlsx/.csv files (omit to pick via a browse dialog)")
+    ap.add_argument("folder", help="Folder containing the purge request .xlsx/.csv files")
     ap.add_argument("-o", "--output", default="purge_dashboard.html", help="Output HTML file (default: purge_dashboard.html)")
     ap.add_argument("--as-of", default=None, help="Override 'today' for overdue checks, e.g. 2026-08-31")
     args = ap.parse_args()
 
-    if args.folder:
-        folder = Path(args.folder).expanduser()
-    else:
-        chosen = browse_for_folder()
-        if not chosen:
-            print("No folder selected.", file=sys.stderr)
-            sys.exit(1)
-        folder = Path(chosen)
-
+    folder = Path(args.folder).expanduser()
     if not folder.is_dir():
         print(f"Not a folder: {folder}", file=sys.stderr)
         sys.exit(1)
