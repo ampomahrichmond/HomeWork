@@ -1,0 +1,205 @@
+{
+  "disclaimer": "Reference knowledge used by the engine to test whether a determination meets known regulatory minimums. It is a starting point curated from public rules, NOT legal advice. Legal/Compliance must validate each entry and its applicability before it is relied upon. Add, edit or retire entries here - the engine reloads them at startup.",
+  "rules": [
+    {
+      "id": "SEC-17a4-b4", "jurisdiction": "US", "type": "floor",
+      "name": "Broker-dealer communications relating to the business as such",
+      "citation": "SEC Rule 17a-4(b)(4), 17 CFR 240.17a-4(b)(4)",
+      "floor": {"years": 3, "trigger": "creation"},
+      "applies_when": ["communication", "correspondence", "email", "chat", "message", "text message", "letter", "instant message", "social media"],
+      "note": "Originals of communications received and copies sent relating to the business as such; first 2 years easily accessible."
+    },
+    {
+      "id": "SEC-17a4-a", "jurisdiction": "US", "type": "floor",
+      "name": "Blotters, general ledgers and customer account ledgers",
+      "citation": "SEC Rule 17a-4(a); records under 17a-3(a)(1)-(3), (5)",
+      "floor": {"years": 6, "trigger": "creation"},
+      "applies_when": ["blotter", "general ledger", "ledger", "stock record", "trade blotter", "securities record", "purchase and sale"],
+      "note": "Six years, first two in an easily accessible place."
+    },
+    {
+      "id": "SEC-17a4-d", "jurisdiction": "US", "type": "floor",
+      "name": "Partnership articles, articles of incorporation, minute books",
+      "citation": "SEC Rule 17a-4(d)",
+      "floor": {"years": 999, "trigger": "permanent"},
+      "applies_when": ["partnership agreement", "partnership articles", "articles of incorporation", "minute book", "board minutes", "stock certificate book", "bylaws"],
+      "note": "Preserved for the life of the enterprise and of any successor enterprise."
+    },
+    {
+      "id": "SEC-17a4-e5", "jurisdiction": "US", "type": "floor",
+      "name": "Customer account records (account record information)",
+      "citation": "SEC Rule 17a-4(e)(5); records under 17a-3(a)(17)",
+      "floor": {"years": 6, "trigger": "event", "event": "earlier of account closing or replacement/update of the information"},
+      "applies_when": ["account record", "account opening", "new account", "client profile", "investment objective", "risk tolerance", "suitability", "account information", "customer account", "client account", "kyc", "know your customer"],
+      "note": "Six years after the earlier of the date the account was closed or the information was replaced or updated."
+    },
+    {
+      "id": "SEC-RegBI", "jurisdiction": "US", "type": "floor",
+      "name": "Regulation Best Interest and Form CRS records",
+      "citation": "SEC Rules 17a-3(a)(35), 17a-4(e)(5) and 17a-4(e)(10)",
+      "floor": {"years": 6, "trigger": "event", "event": "earlier of account closing or update of the information"},
+      "applies_when": ["reg bi", "regulation best interest", "best interest", "form crs", "relationship summary", "recommendation", "retail customer recommendation"],
+      "note": "Records of information collected from and provided to retail customers for recommendations; Form CRS delivery records."
+    },
+    {
+      "id": "SEC-17a4-e1", "jurisdiction": "US", "type": "floor",
+      "name": "Associated person registration records (U4/U5)",
+      "citation": "SEC Rule 17a-4(e)(1); records under 17a-3(a)(12)",
+      "floor": {"years": 3, "trigger": "event", "event": "termination of employment/association"},
+      "applies_when": ["form u4", "form u5", "registration", "licensing", "associated person", "registered representative", "financial advisor registration"],
+      "note": "Until at least three years after the associated person has terminated employment."
+    },
+    {
+      "id": "FINRA-4511", "jurisdiction": "US", "type": "floor",
+      "name": "FINRA default books-and-records retention",
+      "citation": "FINRA Rule 4511(b)",
+      "floor": {"years": 6, "trigger": "creation"},
+      "applies_when": ["finra", "books and records", "broker-dealer record", "supervisory record", "surveillance", "exception report", "supervisory review"],
+      "note": "Six years where no retention period is specified by FINRA or SEA Rule 17a-4."
+    },
+    {
+      "id": "FINRA-4513", "jurisdiction": "US", "type": "floor",
+      "name": "Customer complaint records",
+      "citation": "FINRA Rule 4513",
+      "floor": {"years": 4, "trigger": "creation"},
+      "applies_when": ["complaint", "client complaint", "customer complaint", "grievance"],
+      "note": "Written customer complaints kept at each OSJ for at least four years."
+    },
+    {
+      "id": "IA-204-2", "jurisdiction": "US", "type": "floor",
+      "name": "Investment adviser books and records",
+      "citation": "Advisers Act Rule 204-2(e), 17 CFR 275.204-2",
+      "floor": {"years": 5, "trigger": "creation"},
+      "applies_when": ["advisory", "investment adviser", "advisory program", "managed account", "advisory solutions", "fee-based", "wrap account", "discretionary", "form adv"],
+      "note": "Five years from the end of the fiscal year of the last entry; first two in an appropriate office."
+    },
+    {
+      "id": "BSA-1010-430", "jurisdiction": "US", "type": "floor",
+      "name": "Bank Secrecy Act records",
+      "citation": "31 CFR 1010.430(d)",
+      "floor": {"years": 5, "trigger": "creation"},
+      "applies_when": ["bsa", "bank secrecy", "aml", "anti money laundering", "anti-money laundering", "wire transfer", "funds transfer", "ctr", "currency transaction", "monetary instrument"],
+      "note": "Five years."
+    },
+    {
+      "id": "BSA-CIP", "jurisdiction": "US", "type": "floor",
+      "name": "Customer Identification Program records",
+      "citation": "31 CFR 1023.220(a)(3)",
+      "floor": {"years": 5, "trigger": "event", "event": "account closing"},
+      "applies_when": ["cip", "customer identification", "identity verification", "id verification", "identification documents", "kyc", "know your customer", "beneficial ownership"],
+      "note": "Identifying information kept five years after the account is closed."
+    },
+    {
+      "id": "BSA-SAR", "jurisdiction": "US", "type": "floor",
+      "name": "Suspicious Activity Reports and supporting documentation",
+      "citation": "31 CFR 1023.320(d)",
+      "floor": {"years": 5, "trigger": "creation"},
+      "applies_when": ["sar", "suspicious activity", "suspicious activity report"],
+      "note": "Five years from the date of filing. SAR confidentiality restrictions also apply."
+    },
+    {
+      "id": "IRS-6001", "jurisdiction": "US", "type": "floor",
+      "name": "Tax records (period of limitations)",
+      "citation": "IRC 6001; 26 CFR 1.6001-1(e); IRC 6501",
+      "floor": {"years": 7, "trigger": "creation"},
+      "applies_when": ["tax", "tax return", "tax reporting", "1099", "tax form", "withholding", "cost basis", "irs"],
+      "note": "Keep while material to any tax law (3-year general / 6-year substantial-understatement limitation). 7 years is a common conservative practice - validate with Tax."
+    },
+    {
+      "id": "IRS-EMPTAX", "jurisdiction": "US", "type": "floor",
+      "name": "Employment tax records",
+      "citation": "26 CFR 31.6001-1(e)(2)",
+      "floor": {"years": 4, "trigger": "creation"},
+      "applies_when": ["payroll", "w-2", "employment tax", "withholding", "salary"],
+      "note": "At least four years after the tax is due or paid, whichever is later."
+    },
+    {
+      "id": "ERISA-107", "jurisdiction": "US", "type": "floor",
+      "name": "ERISA reporting and disclosure records",
+      "citation": "ERISA Sections 107 and 209, 29 U.S.C. 1027, 1059",
+      "floor": {"years": 6, "trigger": "creation"},
+      "applies_when": ["erisa", "retirement plan", "401k", "401(k)", "pension", "form 5500", "benefit plan", "profit sharing", "health plan"],
+      "note": "Six years after the filing date of the report; benefit-entitlement records (Sec. 209) for as long as they may be relevant."
+    },
+    {
+      "id": "FLSA-516", "jurisdiction": "US", "type": "floor",
+      "name": "Payroll records (FLSA)",
+      "citation": "29 CFR 516.5",
+      "floor": {"years": 3, "trigger": "creation"},
+      "applies_when": ["payroll", "time record", "timesheet", "wage", "hours worked", "overtime"],
+      "note": "Three years for payroll records; two years for supplementary records (29 CFR 516.6)."
+    },
+    {
+      "id": "EEOC-1602", "jurisdiction": "US", "type": "floor",
+      "name": "Employment and hiring records",
+      "citation": "29 CFR 1602.14",
+      "floor": {"years": 1, "trigger": "creation"},
+      "applies_when": ["recruiting", "applicant", "job application", "resume", "candidate", "hiring", "interview", "personnel action", "termination", "promotion"],
+      "note": "One year from the making of the record or the personnel action; preserve longer if a charge of discrimination is filed."
+    },
+    {
+      "id": "USCIS-I9", "jurisdiction": "US", "type": "floor",
+      "name": "Form I-9 employment eligibility",
+      "citation": "8 CFR 274a.2(b)(2)",
+      "floor": {"years": 3, "trigger": "creation"},
+      "applies_when": ["i-9", "employment eligibility", "work authorization"],
+      "note": "Later of 3 years after hire or 1 year after employment ends."
+    },
+    {
+      "id": "OSHA-1904", "jurisdiction": "US", "type": "floor",
+      "name": "Workplace injury and illness logs",
+      "citation": "29 CFR 1904.33",
+      "floor": {"years": 5, "trigger": "creation"},
+      "applies_when": ["osha", "injury", "workplace safety", "incident log", "illness log"],
+      "note": "Five years following the end of the calendar year the records cover."
+    },
+    {
+      "id": "SOX-802", "jurisdiction": "US", "type": "floor",
+      "name": "Audit and review workpapers",
+      "citation": "Sarbanes-Oxley Sec. 802; 17 CFR 210.2-06",
+      "floor": {"years": 7, "trigger": "creation"},
+      "applies_when": ["sox", "sarbanes", "audit workpaper", "external audit", "financial statement audit", "icfr", "internal control over financial reporting"],
+      "note": "Applies directly to auditors; commonly adopted for issuer ICFR evidence. Confirm applicability."
+    },
+    {
+      "id": "REG-E", "jurisdiction": "US", "type": "floor",
+      "name": "Electronic fund transfer compliance evidence (banking)",
+      "citation": "Regulation E, 12 CFR 1005.13(b)",
+      "floor": {"years": 2, "trigger": "creation"},
+      "applies_when": ["electronic fund transfer", "eft", "debit card", "reg e", "atm", "bank account", "deposit account"],
+      "note": "Evidence of compliance for not less than two years."
+    },
+    {
+      "id": "REG-B", "jurisdiction": "US", "type": "floor",
+      "name": "Credit application records (banking)",
+      "citation": "Regulation B, 12 CFR 1002.12(b)",
+      "floor": {"years": 2, "trigger": "creation"},
+      "applies_when": ["credit application", "loan application", "credit decision", "adverse action", "lending", "line of credit"],
+      "note": "25 months after notifying the applicant of action taken (rounded up to 2 years here)."
+    },
+    {
+      "id": "FINTRAC-PCMLTFR", "jurisdiction": "CA", "type": "floor",
+      "name": "Canadian AML / identification records",
+      "citation": "Proceeds of Crime (Money Laundering) and Terrorist Financing Regulations",
+      "floor": {"years": 5, "trigger": "creation"},
+      "applies_when": ["fintrac", "canada aml", "canadian client", "large cash transaction", "proceeds of crime"],
+      "note": "Generally at least five years. Verify the specific record type and trigger with Canadian Compliance."
+    },
+    {
+      "id": "CIRO-BR", "jurisdiction": "CA", "type": "floor",
+      "name": "Canadian investment dealer books and records",
+      "citation": "CIRO Investment Dealer and Partially Consolidated (IDPC) Rules - books and records requirements [VERIFY rule numbers]",
+      "floor": {"years": 7, "trigger": "creation"},
+      "applies_when": ["ciro", "iiroc", "canada", "canadian", "investment dealer", "osc", "csa"],
+      "note": "Commonly applied as 7 years. Placeholder - Canadian Compliance must confirm the governing provisions and periods."
+    },
+    {
+      "id": "PRIV-MIN", "jurisdiction": "US/CA", "type": "ceiling",
+      "name": "Privacy data-minimization / disposal",
+      "citation": "Reg S-P Disposal Rule (17 CFR 248.30(b)); PIPEDA Principle 4.5; state privacy laws",
+      "floor": null,
+      "applies_when": ["pii", "personal information", "personally identifiable", "ssn", "social security", "date of birth", "biometric", "personal data", "sensitive personal"],
+      "note": "Not a minimum. Personal information should not be kept longer than needed and must be disposed of securely. Supports disposing on schedule and argues against over-retention."
+    }
+  ]
+}
